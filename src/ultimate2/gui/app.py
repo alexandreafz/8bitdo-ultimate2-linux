@@ -78,6 +78,8 @@ class App(Pages, ControllerView, Editor, DeviceSync, PadInput, tk.Tk):
         self._remapped = set()
         self._closing = False
         self.conn = None         # connection badge state of the last successful read
+        self.xmode_tried = False # Ultimate 2.4G on X: tried to open its X configuration once
+        self.xmode_open = False  # ... and opened it: put it back on X when the window closes
         self._style()
         self._vars()
         self._build()
@@ -108,6 +110,7 @@ class App(Pages, ControllerView, Editor, DeviceSync, PadInput, tk.Tk):
 
     def destroy(self):
         self._closing = True
+        self.leave_xmode()
         for job in self.tk.splitlist(self.tk.call("after", "info")):   # timers would outlive the window
             self.after_cancel(job)
         super().destroy()

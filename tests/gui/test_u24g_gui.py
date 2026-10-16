@@ -51,7 +51,7 @@ def test_pages_buttons_and_texts(ua):
     assert "Ultimate 2.4G" not in home and "L4" not in home and "R4" not in home
     assert "Traseiros P2 / P1" in home and "P1" in home and "PR" not in home
     assert not any(leds for c, leds in ua.led_items)                      # no LED rings drawn
-    assert "D-input" in ua.info_label.cget("text") and "Ultimate 2.4G (D)" in ua.info_label.cget("text")
+    assert "D-input" in ua.info_label.cget("text") and "Ultimate 2.4G (cable, config)" in ua.info_label.cget("text")
     assert ua.fw_label.cget("text") == "firmware 2.04" and ua.active_slot == 4
 
 
@@ -161,4 +161,79 @@ def test_bluetooth_status(monkeypatch, fast):
     finally:
         clear_timers(a)
         a.destroy()
+
+
+def test_x_mode_opens_the_x_configuration(monkeypatch, fast):
+    from ultimate2 import xmode
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))
+    monkeypatch.setattr(discovery, "xinput_u24g", lambda: True)
+    monkeypatch.setattr(xmode, "enter", lambda: True)
+    a = new_app(monkeypatch)
+    reads = []
+    try:
+        a.read_device()
+        monkeypatch.setattr(a, "read_device", lambda retry=False: reads.append(retry))
+        pump(a, lambda: reads)
+        assert a.xmode_open and a.xmode_tried
+    finally:
+        clear_timers(a)
+        a.xmode_open = False
+        a.destroy()
+
+
+def test_x_mode_open_fails(monkeypatch, fast):
+    from ultimate2 import xmode
+    a = new_app(monkeypatch)
+    try:
+        def denied():
+            raise PermissionError
+        monkeypatch.setattr(xmode, "enter", denied)
+        a.enter_xmode()
+        pump(a)
+        assert "reinstale o pacote" in a.status.cget("text") and not a.xmode_open
+        monkeypatch.setattr(xmode, "enter", lambda: False)
+        a.enter_xmode()
+        pump(a)
+        assert "modo X" in a.status.cget("text")
+    finally:
+        clear_timers(a)
+        a.destroy()
+
+
+def test_closing_puts_it_back_on_x(u24, monkeypatch, fast):
+    from ultimate2 import xmode
+    sent = []
+    monkeypatch.setattr(xmode, "leave", lambda dev: sent.append(dev.pid))
+    a = new_app(monkeypatch)
+    a.leave_xmode()                                       # did not open it: nothing to do
+    assert sent == []
+    a.xmode_open = True
+    clear_timers(a)
+    a.destroy()
+    assert sent == [0x3012] and not a.xmode_open
+
+
+def test_leaving_x_mode_when_the_pad_is_gone(monkeypatch, fast):
+    from ultimate2 import device as dmod, xmode
+    a = new_app(monkeypatch)
+    a.xmode_open = True
+    monkeypatch.setattr(dmod, "Device", lambda *x: (_ for _ in ()).throw(SystemExit("no device")))
+    a.leave_xmode()
+    assert not a.xmode_open
+
+    class Dev:
+        pid, closed = 0x3013, False
+
+        def close(self):
+            Dev.closed = True
+    monkeypatch.setattr(dmod, "Device", lambda *x: Dev())
+
+    def broken(dev):
+        raise OSError(19, "gone")
+    monkeypatch.setattr(xmode, "leave", broken)
+    a.xmode_open = True
+    a.leave_xmode()
+    assert Dev.closed
+    clear_timers(a)
+    a.destroy()
 

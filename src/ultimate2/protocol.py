@@ -43,7 +43,7 @@ def crc16(data):
 # Reverse-engineered from 8BitDo Ultimate Software V1 (8BitDoAdvance.dll: readUltimate2_4/writeUltimate2_4,
 # PID_Ultimate2_4). The config interface only exists with the mode switch on the back set to D; on X the controller
 # is an XInput pad (2dc8:3106, xpad) without it.
-U24G_PIDS = {0x3012: "Ultimate 2.4G (D)", 0x3013: "Ultimate 2.4G dongle (D)"}
+U24G_PIDS = {0x3012: "Ultimate 2.4G (cable, config)", 0x3013: "Ultimate 2.4G receiver (config)"}
 U24G_XINPUT_PIDS = {0x3106: "Ultimate 2.4G (X)"}
 U24G_CFG_SIZE = 1652     # sizeof(custom_config_record_t) of Ultimate2_4Advance
 U24G_COMMIT_KEY = 0x15   # sub-command of CMD_COMMIT (the DLL's FUN_103c63b0(6, 0x15))

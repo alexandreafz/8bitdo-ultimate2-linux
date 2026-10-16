@@ -192,3 +192,12 @@ and the four macro records zeroed; the slot flag and every section flag are set 
 `/dev/input/jsN` has 16 buttons — A 0, B 1, X 3, Y 4, LB 6, RB 7, LT 8, RT 9, Select 10, Start 11, Home 12, L3 13,
 R3 14 (Star sends nothing) — and 8 axes: LX 0, LY 1, RX 2, RY 3, RT 4, LT 5, d-pad hat 6/7.
 
+### Opening the X configuration (verified 2026-10-16, receiver fw 1.10, controller fw 2.04)
+
+A USBPcap capture of Ultimate Software V1 on Windows (receiver on X) shows the whole sequence. At connect, xusb22
+sends `01 03 02`, `02 08 03`, `01 03 02`, `01 03 06` on endpoint `0x02`; xpad never sends `02 08 03`. When the app
+starts it sends the knock `00 08 00 L R 00 00 00` with (1,0) (0,1) (1,1) (5,1) (0,0), ~15 ms apart, three times
+~400 ms apart; half a second later the receiver re-enumerates as `2dc8:3013` with the config channel, and the record
+read there has `gamepad_mode` 3 (the X configuration). `81 05 00 51 02` on that channel brings it back to `3106`.
+Replayed over usbfs (`ultimate2/xmode.py`, after detaching xpad) the same bytes work on Linux.
+

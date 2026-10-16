@@ -198,7 +198,7 @@ def test_write_without_commit_answer(u24, fast):
 def test_x_mode_hint(monkeypatch):
     monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))
     monkeypatch.setattr(discovery, "xinput_u24g", lambda: True)
-    with pytest.raises(SystemExit, match="set the switch on its back to D"):
+    with pytest.raises(SystemExit, match="run `u2ctl xmode enter`"):
         Device()
 
 
@@ -207,10 +207,10 @@ def test_cli_list_info_dump(u24, monkeypatch, capsys):
     monkeypatch.setattr(discovery, "xinput_u24g", lambda: True)
     run("list")
     out = capsys.readouterr().out
-    assert "2dc8:3012  Ultimate 2.4G (D)" in out and "set the switch on its back to D" in out
+    assert "2dc8:3012  Ultimate 2.4G (cable, config)" in out and "`u2ctl xmode enter` opens its X configuration" in out
     run("info")
     out = capsys.readouterr().out
-    assert "Ultimate 2.4G (D), Ultimate 2.4G" in out and "firmware    2.04" in out and "cur_slot=4" in out
+    assert "Ultimate 2.4G (cable, config), Ultimate 2.4G" in out and "firmware    2.04" in out and "cur_slot=4" in out
     run("dump")
     assert json.loads(capsys.readouterr().out)["model"] == "u24g"
 
@@ -339,4 +339,116 @@ def test_cli_list_bluetooth_hint(monkeypatch, capsys):
     monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)
     run("list")
     assert "over Bluetooth: no configuration channel there" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------ X mode (Windows sequence over usbfs)
+from ultimate2 import xmode  # noqa: E402
+
+
+def _usbdev(sys_, name, vid, pid, bus, dev):
+    d = sys_ / "bus" / "usb" / "devices" / name
+    d.mkdir(parents=True)
+    for k, v in (("idVendor", vid), ("idProduct", pid), ("busnum", bus), ("devnum", dev)):
+        (d / k).write_text(f"{v}\n")
+
+
+@pytest.fixture
+def usbfs(tmp_path, monkeypatch):
+    """Fake sysfs with a 2dc8:3106 pad, fake usbfs ioctls (recorded) and no sleeping."""
+    monkeypatch.setattr(discovery, "SYS", str(tmp_path))
+    _usbdev(tmp_path, "3-1", "046d", "c52b", 3, 2)
+    _usbdev(tmp_path, "3-3", "2dc8", "3106", 3, 9)
+    _usbdev(tmp_path, "usb3", "", "", "", "")
+    calls, opened = [], []
+    real_open = os.open
+    monkeypatch.setattr(xmode.os, "open", lambda path, flags: opened.append(path) or real_open(os.devnull, os.O_RDWR))
+
+    def ioctl(fd, req, arg, mutate=False):
+        if req == xmode.USBDEVFS_BULK:
+            ptr = struct.unpack_from("III4xP", arg)
+            calls.append(("out", ctypes.string_at(ptr[3], ptr[1])))
+        else:
+            calls.append((req, struct.unpack_from("i", arg)[0] if req != xmode.USBDEVFS_IOCTL else struct.unpack_from("ii", arg)[1]))
+        return 0
+    import ctypes
+    monkeypatch.setattr(xmode.fcntl, "ioctl", ioctl)
+    monkeypatch.setattr(xmode, "sleep", lambda s: None)
+    monkeypatch.setattr(xmode, "DEV_BUS", "/devx/bus/usb")
+    return calls, opened
+
+
+def test_xmode_finds_the_pad_on_x(usbfs):
+    assert xmode.find_xinput_node() == "/devx/bus/usb/003/009"
+
+
+def test_xmode_enter_sends_the_windows_sequence(usbfs, monkeypatch):
+    calls, opened = usbfs
+    seen = iter([[], [("/dev/hidraw9", 0x3013, "/x")]])
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter(next(seen)))
+    assert xmode.enter() is True and opened == ["/devx/bus/usb/003/009"]
+    outs = [c[1] for c in calls if c[0] == "out"]
+    assert outs[:4] == [bytes.fromhex(h) for h in ("010302", "020803", "010302", "010306")]
+    knock = [bytes([0, 8, 0, l, r, 0, 0, 0]) for l, r in ((1, 0), (0, 1), (1, 1), (5, 1), (0, 0))]
+    assert outs[4:] == knock * 3
+    assert calls[0] == (xmode.USBDEVFS_IOCTL, xmode.USBDEVFS_DISCONNECT) and calls[-1] == (xmode.USBDEVFS_IOCTL, xmode.USBDEVFS_CONNECT)
+
+
+def test_xmode_enter_without_pad_timeout_and_gone(usbfs, monkeypatch, tmp_path):
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))
+    assert xmode.enter(timeout=0.01) is False                  # never re-enumerated with a config channel
+
+    def gone(fd, req, arg, mutate=False):                      # re-enumerated already: release/connect fail
+        if req in (xmode.USBDEVFS_RELEASEINTERFACE,):
+            raise OSError(19, "No such device")
+        return 0
+    monkeypatch.setattr(xmode.fcntl, "ioctl", gone)
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([("/dev/hidraw9", 0x3012, "/x")]))
+    assert xmode.enter() is True
+    monkeypatch.setattr(discovery, "SYS", str(tmp_path / "empty"))
+    assert xmode.enter() is False and xmode.find_xinput_node() is None
+
+
+def test_xmode_enter_without_permission(usbfs, monkeypatch):
+    def denied(path, flags):
+        raise PermissionError(13, "Permission denied")
+    monkeypatch.setattr(xmode.os, "open", denied)
+    with pytest.raises(PermissionError):
+        xmode.enter()
+
+
+def test_xmode_leave_writes_back_to_x():
+    r, w = os.pipe()
+    try:
+        xmode.leave(type("D", (), {"fd": w})())
+        assert os.read(r, 64) == b"\x81\x05\x00\x51\x02".ljust(64, b"\0")
+    finally:
+        os.close(r)
+        os.close(w)
+
+
+def test_cli_xmode(monkeypatch, capsys):
+    monkeypatch.setattr(xmode, "enter", lambda: True)
+    run("xmode", "enter")
+    assert "config mode open (X configuration)" in capsys.readouterr().out
+    monkeypatch.setattr(xmode, "enter", lambda: False)
+    with pytest.raises(SystemExit, match="did not open its config mode"):
+        run("xmode", "enter")
+
+    def denied():
+        raise PermissionError
+    monkeypatch.setattr(xmode, "enter", denied)
+    with pytest.raises(SystemExit, match="reinstall the package"):
+        run("xmode", "enter")
+
+
+def test_cli_xmode_leave(u24, monkeypatch, capsys):
+    sent = []
+    monkeypatch.setattr(xmode, "leave", lambda dev: sent.append(dev.pid))
+    run("xmode", "leave")
+    assert sent == [0x3012] and "back to X" in capsys.readouterr().out
+
+
+def test_cli_xmode_leave_other_model(fake):
+    with pytest.raises(SystemExit, match="has no X/D modes"):
+        run("xmode", "leave")
 

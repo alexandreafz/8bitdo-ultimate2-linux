@@ -4,7 +4,7 @@ import threading
 import time
 from tkinter import filedialog, messagebox
 
-from .. import config, device, protocol
+from .. import config, device, protocol, xmode
 from . import theme
 from .i18n import _
 from .theme import ACCENT, DANGER, DEFAULT_SKIN, EDITION_SKINS, MUTED, SKINS, THEME_NAMES
@@ -173,8 +173,11 @@ class DeviceSync:
                 self.set_status(msg, True)
                 error_dialog(self, _("Erro"), msg, self.s)
                 return
+            if "X mode" in msg and not self.xmode_tried:
+                self.xmode_tried = True
+                return self.enter_xmode()
             self.set_status(_("Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.")
-                            if "switch on its back" in msg else
+                            if "X mode" in msg else
                             _("Ultimate 2.4G conectado por Bluetooth, que não permite configurar: ligue o cabo USB "
                               "(chave em D). Os perfis gravados valem também no Bluetooth.")
                             if "Bluetooth" in msg else
@@ -206,7 +209,7 @@ class DeviceSync:
             fw = f"{info['firmware'] / 100:.2f}" if info else "?"
             self.conn = (fw, pad and pad["battery"])
             self.set_connected(self.conn)
-            modes = {0: "Switch", 1: "Android" if self.model.leds else "D-input", 3: "Windows (XInput)"}
+            modes = {0: "Switch", 1: "Android" if self.model.leds else "D-input", 3: "Windows (XInput)" if self.model.leds else "X-input"}
             mode = modes.get(self.doc["gamepad_mode"], self.doc["gamepad_mode"])
             self.info_label.configure(text=_("Dispositivo: {}\nModo: {}\nEdição: {} ({})").format(
                 f"{path} · {protocol.describe(pid, hex(pid))}", mode, edition, _(SKINS[self.skin]["name"])))
@@ -214,6 +217,49 @@ class DeviceSync:
             self.refresh_slots()
             self.set_status(_("Configuração lida do controle. As mudanças são salvas automaticamente."))
         self.run("" if retry else _("Lendo do controle…"), job, done, quiet=retry, fail=fail)
+
+    # ------------------------------------------------------------ Ultimate 2.4G on X
+    def enter_xmode(self):
+        """Open the X configuration like the Windows app (the receiver only works on X); :meth:`leave_xmode` on close."""
+        self.busy = True
+        self.set_status(_("Abrindo a configuração do modo X…"))
+
+        def work():
+            try:
+                ok, err = xmode.enter(), None
+            except OSError as e:
+                ok, err = False, e
+            self.after(0, lambda: self._entered_xmode(ok, err))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _entered_xmode(self, ok, err):
+        self.busy = False
+        if ok:
+            self.xmode_open = True
+            return self.read_device()
+        self.set_connected(None)
+        self._retry_job = self.after(theme.RETRY_MS, lambda: self.read_device(True))   # e.g. the switch moved to D
+        if isinstance(err, PermissionError):
+            self.set_status(_("Sem permissão para abrir o modo X: reinstale o pacote (regra udev) e reconecte o controle. "
+                              "Ou coloque a chave em D."), True)
+        else:
+            self.set_status(_("Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo."))
+
+    def leave_xmode(self):
+        """Put the controller back on X if this window opened its config mode."""
+        if not self.xmode_open:
+            return
+        self.xmode_open = False
+        try:
+            dev = device.Device()
+        except BaseException:      # already gone (unplugged, switched off)
+            return
+        try:
+            xmode.leave(dev)
+        except OSError:
+            pass
+        finally:
+            dev.close()
 
     # ------------------------------------------------------------ backups
     def backup(self):

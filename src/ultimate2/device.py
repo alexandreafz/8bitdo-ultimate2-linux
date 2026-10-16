@@ -27,7 +27,8 @@ class Device:
             devs = [d for d in devs if d[0] == path] or [(path, 0, "")]
         if not devs:
             if discovery.xinput_u24g():
-                sys.exit("8BitDo Ultimate 2.4G found in X mode: set the switch on its back to D to configure it")
+                sys.exit("8BitDo Ultimate 2.4G found in X mode: run `u2ctl xmode enter` to open its X configuration "
+                         "(or set the switch on its back to D)")
             if discovery.bluetooth_u24g():
                 sys.exit("8BitDo Ultimate 2.4G connected over Bluetooth, which has no configuration channel: "
                          "connect the USB cable (switch on D) to configure it")
