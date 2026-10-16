@@ -134,6 +134,13 @@ The V1 app tries to move XInput pads to D by playing a rumble "knock" (`Xinput.s
 and sends `81 05 00 51 02` on exit to go back to XInput. Sent through `xpad` force feedback the knock reaches the
 controller byte for byte (checked with usbmon), but firmware 2.04 ignores it: use the switch.
 
+The configuration is **per mode**: with the switch on X the controller uses another record than the one read on D
+(`gamepad_mode` 3 instead of 1). Linux cannot reach the X one. `tools/xmode_handshake.py` (root) replays what Windows
+does before the knock: the MS OS 1.0 descriptor is there (string `0xEE` = `MSFT100`, vendor code `0x90`, compat ID
+`XUSB10`), the xusb22 vendor requests (`C1 01 0100`, `C0 01 0000`) are stalled, the player LED is accepted, and the
+knock sent straight on endpoint `0x02` is accepted and ignored, both wired and through the receiver (which only
+connects on X). The V1 app itself only calls `XInputSetState` of `xinput1_3.dll`.
+
 ### Frames
 
 ```
