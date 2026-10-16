@@ -130,6 +130,9 @@ EN = {
         "Controller off or out of range. Turn it on: it will be read automatically.",
     "Clique num botão do controle para escolher a função dele.\nP1/P2: botões traseiros · ★: estrela/turbo.":
         "Click a button on the controller to choose its function.\nP1/P2: back buttons · ★: star/turbo.",
+    "Copiar": "Copy",
+    "Ultimate 2.4G conectado por Bluetooth, que não permite configurar: ligue o cabo USB (chave em D). Os perfis gravados valem também no Bluetooth.":
+        "Ultimate 2.4G connected over Bluetooth, which cannot be configured: plug in the USB cable (switch on D). The saved profiles also apply over Bluetooth.",
     "Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.":
         "Ultimate 2.4G in X mode: set the switch on the back of the controller to D to configure it.",
 }

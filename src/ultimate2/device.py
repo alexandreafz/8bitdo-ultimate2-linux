@@ -28,6 +28,9 @@ class Device:
         if not devs:
             if discovery.xinput_u24g():
                 sys.exit("8BitDo Ultimate 2.4G found in X mode: set the switch on its back to D to configure it")
+            if discovery.bluetooth_u24g():
+                sys.exit("8BitDo Ultimate 2.4G connected over Bluetooth, which has no configuration channel: "
+                         "connect the USB cable (switch on D) to configure it")
             sys.exit("no 8BitDo config interface found (is the controller plugged in / paired?)")
         self.path, self.pid, usb_dir = devs[0]
         self.model = protocol.model_for_pid(self.pid)

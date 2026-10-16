@@ -242,11 +242,15 @@ def test_cli_backup_restore(u24, capsys, tmp_path):
 
 
 # ------------------------------------------------------------ discovery
-def _hidraw(sys_, idx, pid, desc):
+USB_DESC = b"\x05\x01\x09\x05\xa1\x01\x85\x03\x85\x02\x09\x02\x85\x81\x09\x03\xc0"   # gamepad + config reports 0x02/0x81
+BT_DESC = b"\x05\x01\x09\x05\xa1\x01\x85\x03\x85\x05\x09\x70\xc0"    # the same pad over Bluetooth: gamepad + rumble only
+
+
+def _hidraw(sys_, idx, pid, desc, bus=3):
     usb = sys_ / "devices" / f"usb{idx}" / "3-3"
-    hid = usb / "3-3:1.0" / f"0003:2DC8:{pid:04X}.000{idx}"
+    hid = usb / "3-3:1.0" / f"{bus:04X}:2DC8:{pid:04X}.000{idx}"
     hid.mkdir(parents=True)
-    (hid / "uevent").write_text(f"HID_ID=0003:00002DC8:0000{pid:04X}\n")
+    (hid / "uevent").write_text(f"HID_ID={bus:04X}:00002DC8:0000{pid:04X}\n")
     (hid / "report_descriptor").write_bytes(desc)
     cls = sys_ / "class" / "hidraw" / f"hidraw{idx}"
     cls.mkdir(parents=True)
@@ -268,7 +272,7 @@ def test_discovery_u24g_by_pid(tmp_path, monkeypatch):
     assert discovery.connected_model() is p.U2 and not discovery.xinput_u24g()
     _event(tmp_path, 1, "3/2dc8/3106/114")
     assert discovery.xinput_u24g() and discovery.connected_model() is p.U24G
-    _hidraw(tmp_path, 2, 0x3012, b"\x05\x01\x09\x05")      # a plain gamepad descriptor
+    _hidraw(tmp_path, 2, 0x3012, USB_DESC)                  # gamepad that also carries the config reports
     _hidraw(tmp_path, 3, 0x3105, b"\x05\x01\x09\x05")      # another 8BitDo pad: no config channel
     assert [(x[0], x[1]) for x in discovery.find_devices()] == [("/devx/hidraw2", 0x3012)]
     assert discovery.connected_model() is p.U24G
@@ -309,4 +313,30 @@ def test_write_keeps_the_controllers_active_profile(u24):
         assert struct.unpack_from("<H", bytes(u24.cfg), 18)[0] == 4
     finally:
         d.close()
+
+
+def test_bluetooth_is_not_configurable(tmp_path, monkeypatch):
+    monkeypatch.setattr(discovery, "SYS", str(tmp_path))
+    _hidraw(tmp_path, 1, 0x3012, BT_DESC, bus=5)
+    assert list(discovery.find_devices()) == [] and discovery.bluetooth_u24g()
+    assert discovery.connected_model() is p.U24G
+    with pytest.raises(SystemExit, match="over Bluetooth, which has no configuration channel"):
+        Device()
+    _hidraw(tmp_path, 2, 0x3012, USB_DESC)                  # the cable plugged in too: that one is used
+    assert [x[1] for x in discovery.find_devices()] == [0x3012]
+
+
+def test_bluetooth_detection_ignores_others(tmp_path, monkeypatch):
+    monkeypatch.setattr(discovery, "SYS", str(tmp_path))
+    _hidraw(tmp_path, 1, 0x3012, USB_DESC)                  # USB
+    _hidraw(tmp_path, 2, 0x6012, BT_DESC, bus=5)            # another model over Bluetooth
+    assert not discovery.bluetooth_u24g()
+
+
+def test_cli_list_bluetooth_hint(monkeypatch, capsys):
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))
+    monkeypatch.setattr(discovery, "xinput_u24g", lambda: False)
+    monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)
+    run("list")
+    assert "over Bluetooth: no configuration channel there" in capsys.readouterr().out
 

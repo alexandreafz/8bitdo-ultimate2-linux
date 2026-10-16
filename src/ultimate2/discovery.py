@@ -7,6 +7,9 @@ from . import protocol
 SYS, DEV = "/sys", "/dev"   # roots, overridable by tests
 # report descriptors of the config channel: usage page 0xFF7A (controller) / 0xFFA0 (2.4G dongle)
 CONFIG_DESCRIPTORS = (b"\x06\x7a\xff", b"\x06\xa0\xff")
+# Ultimate 2.4G: its gamepad interface carries the config channel only over USB (output report 0x81); over
+# Bluetooth it has the same PID and no such report
+U24G_CONFIG_REPORT = b"\x85\x81"
 
 
 def _read(path):
@@ -30,8 +33,9 @@ def find_devices():
             _, vid, pid = (int(x, 16) for x in hid_id.split(":"))
         except ValueError:
             continue
-        if vid != protocol.VID or (pid not in protocol.U24G_PIDS
-                                   and _read(d + "/device/report_descriptor")[:3] not in CONFIG_DESCRIPTORS):
+        desc = _read(d + "/device/report_descriptor")
+        if vid != protocol.VID or not (U24G_CONFIG_REPORT in desc if pid in protocol.U24G_PIDS
+                                       else desc[:3] in CONFIG_DESCRIPTORS):
             continue
         usb_dir = os.path.dirname(os.path.dirname(os.path.realpath(d + "/device")))
         yield DEV + "/" + os.path.basename(d), pid, usb_dir
@@ -57,9 +61,19 @@ def xinput_u24g():
                for e in sorted(glob.glob(SYS + "/class/input/event*")))
 
 
+def bluetooth_u24g():
+    """``True`` if an Ultimate 2.4G is connected over Bluetooth (HID bus 0005), where it cannot be configured."""
+    for d in sorted(glob.glob(SYS + "/class/hidraw/hidraw*")):
+        ue = _read(d + "/device/uevent").decode(errors="replace")
+        if any(l.upper().startswith(f"HID_ID=0005:0000{protocol.VID:04X}:0000{p:04X}") for l in ue.splitlines()
+               for p in protocol.U24G_PIDS):
+            return True
+    return False
+
+
 def connected_model():
     """Model of the first controller found (sysfs only, no I/O); the Ultimate 2 when nothing is plugged in."""
     dev = next(find_devices(), None)
     if dev:
         return protocol.model_for_pid(dev[1])
-    return protocol.U24G if xinput_u24g() else protocol.U2
+    return protocol.U24G if xinput_u24g() or bluetooth_u24g() else protocol.U2

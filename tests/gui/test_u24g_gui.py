@@ -146,3 +146,19 @@ def test_x_mode_status(monkeypatch, fast):
     finally:
         clear_timers(a)
         a.destroy()
+
+
+def test_bluetooth_status(monkeypatch, fast):
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))
+    monkeypatch.setattr(discovery, "xinput_u24g", lambda: False)
+    monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)
+    a = new_app(monkeypatch)
+    try:
+        assert a.model is protocol.U24G
+        a.read_device()
+        pump(a)
+        assert "Bluetooth" in a.status.cget("text") and "cabo USB" in a.status.cget("text") and a._retry_job
+    finally:
+        clear_timers(a)
+        a.destroy()
+

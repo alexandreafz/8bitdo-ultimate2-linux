@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## 0.1.0-beta.6+u24g3 — 2026-10-16
+## 0.1.0-beta.6+u24g4 — 2026-10-16
 
 * Support for the **8BitDo Ultimate 2.4G** (the first Ultimate), with its mode switch on D (`2dc8:3012`; the dongle
   `2dc8:3013` is untested): profiles, buttons with the P1/P2 back buttons, sticks, triggers, rumble and backups in
@@ -13,6 +13,9 @@ This project follows [Semantic Versioning](https://semver.org/).
   “verificação falhou” after changing a button.
 * `u2gui` no longer reports “verificação falhou” when it creates a profile on the Ultimate 2.4G: the saved record is
   compared whole, minus the save counter and active profile its firmware keeps.
+* Ultimate 2.4G over Bluetooth (firmware 2.00+, switch on D): same PID but no configuration channel, so it is no
+  longer opened (it gave “permission denied”); both tools say to use the USB cable. Its profiles are those of D mode.
+* Error messages in `u2gui` open in a window whose text can be selected and copied (Copy button, Ctrl+A/Ctrl+C).
 * `tools/probe_u24g.py`: read-only check of an Ultimate 2.4G (version and the whole record, saved to a file).
 
 ## 0.1.0-beta.6 — 2026-10-15

@@ -294,3 +294,43 @@ class ColorPicker(tk.Frame):
         self.bar.coords(self.bar_knob, *rr_points(2 * s, max(2, y - 4 * s), 20 * s, min(d - 2, y + 4 * s), 4 * s))
         self.preview.itemconfigure(self.preview_dot, fill=self.color())
         self.hex.set(self.color())
+
+
+def error_dialog(parent, title, message, s=1.0, wait=True):
+    """Error window whose text can be selected and copied (Tk's message box cannot): a read-only text, a Copy
+    button and OK. ``wait`` makes it modal until closed."""
+    top = tk.Toplevel(parent, bg=TILE)
+    top.title(title)
+    top.transient(parent)
+    pad = int(14 * s)
+    lines = sum(len(l) // 60 + 1 for l in message.splitlines()) or 1
+    txt = tk.Text(top, wrap="word", width=60, height=min(lines, 12), bg=TILE, fg=FG, insertbackground=FG,
+                  relief="flat", highlightthickness=0, font=theme.font(10), padx=pad, pady=pad)
+    txt.insert("1.0", message)
+    txt.pack(fill="both", expand=True)
+
+    def readonly(e):                       # selection, copy and moving around only: no typing, cutting or pasting
+        ctrl = e.state & 0x4
+        if ctrl and e.keysym.lower() in ("c", "a", "insert"):
+            return None
+        return None if e.keysym in ("Left", "Right", "Up", "Down", "Home", "End", "Prior", "Next") else "break"
+    txt.bind("<Key>", readonly)
+    for seq in ("<<Cut>>", "<<Paste>>", "<<Clear>>", "<<PasteSelection>>"):
+        txt.bind(seq, lambda e: "break")
+    txt.bind("<Control-a>", lambda e: (txt.tag_add("sel", "1.0", "end-1c"), "break")[1])
+
+    def copy():
+        top.clipboard_clear()
+        top.clipboard_append(message)
+    row = tk.Frame(top, bg=TILE)
+    row.pack(fill="x", padx=pad, pady=(0, pad))
+    Pill(row, _("Copiar"), s, cmd=copy).pack(side="left")
+    Pill(row, "OK", s, cmd=top.destroy, fill=ACCENT, fg=TILE).pack(side="right")
+    top.bind("<Escape>", lambda e: top.destroy())
+    top.bind("<Return>", lambda e: top.destroy())
+    txt.focus_set()
+    if wait:
+        top.grab_set()
+        parent.wait_window(top)
+    return top
+

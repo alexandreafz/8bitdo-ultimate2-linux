@@ -8,6 +8,7 @@ from .. import config, device, protocol
 from . import theme
 from .i18n import _
 from .theme import ACCENT, DANGER, DEFAULT_SKIN, EDITION_SKINS, MUTED, SKINS, THEME_NAMES
+from .widgets import error_dialog
 
 
 class DeviceSync:
@@ -69,7 +70,7 @@ class DeviceSync:
                     self.after(0, lambda: self.set_connected(None))
                 else:
                     self.after(0, lambda: (self.set_status(msg, True), self.set_connected(None),
-                                           messagebox.showerror(_("Erro"), msg, parent=self)))
+                                           error_dialog(self, _("Erro"), msg, self.s)))
             finally:
                 if dev:
                     dev.close()
@@ -170,10 +171,13 @@ class DeviceSync:
             self.set_connected(None)
             if isinstance(e, SystemExit) and "permission" in msg:
                 self.set_status(msg, True)
-                messagebox.showerror(_("Erro"), msg, parent=self)
+                error_dialog(self, _("Erro"), msg, self.s)
                 return
             self.set_status(_("Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.")
                             if "switch on its back" in msg else
+                            _("Ultimate 2.4G conectado por Bluetooth, que não permite configurar: ligue o cabo USB "
+                              "(chave em D). Os perfis gravados valem também no Bluetooth.")
+                            if "Bluetooth" in msg else
                             _("Controle desligado ou fora de alcance. Ligue-o: ele será lido automaticamente."))
             self._retry_job = self.after(theme.RETRY_MS, lambda: self.read_device(True))
 
@@ -228,8 +232,8 @@ class DeviceSync:
         with open(path, "rb") as f:
             data = f.read()
         if len(data) != self.model.cfg_size:
-            return messagebox.showerror(_("Erro"), _("Arquivo inválido ({} bytes, esperado {}).").format(len(data), self.model.cfg_size),
-                                        parent=self)
+            return error_dialog(self, _("Erro"), _("Arquivo inválido ({} bytes, esperado {}).").format(len(data), self.model.cfg_size),
+                                self.s)
         if not messagebox.askyesno(_("Restaurar"), _("Substituir toda a configuração do controle por este backup?"), parent=self):
             return
 

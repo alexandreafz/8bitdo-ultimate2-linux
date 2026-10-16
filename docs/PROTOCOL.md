@@ -128,6 +128,8 @@ controller with firmware 2.04 over USB.
 | X | `2dc8:3106` | XInput pad (`xpad`), one vendor-specific interface, **no config channel** |
 | D | `2dc8:3012` | one HID interface (generic gamepad) that also carries the config reports |
 | D, through the dongle | `2dc8:3013` (`PID_Ultimate2_4RR`) | not tested |
+| D, Bluetooth (firmware 2.00+; pair with ★ held 3 s) | `0005:2dc8:3012` | gamepad + rumble reports only, **no config channel**; uses the D-mode profiles |
+| no controller, receiver only | `2dc8:3109` "8BitDo IDLE" | HID interface (not examined) |
 
 The V1 app tries to move XInput pads to D by playing a rumble "knock" (`Xinput.subXinput_C`: motor values
 0, 0, .006/0, 0/.006, .006/.006, .022/.006, 0 → bytes `(0,0) (0,0) (1,0) (0,1) (1,1) (5,1) (0,0)`, 10 ms apart)

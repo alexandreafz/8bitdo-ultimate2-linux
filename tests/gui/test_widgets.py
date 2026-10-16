@@ -287,3 +287,61 @@ def test_select_shows_the_choice_and_its_menu_sets_the_variable(shared_app, scra
     monkeypatch.setattr(sel.menu, "tk_popup", lambda x, y: posted.append((x, y)))
     click(shared_app, sel)
     assert posted == [(sel.winfo_rootx(), sel.winfo_rooty() - sel.menu.winfo_reqheight())]   # opens above it
+
+
+# ------------------------------------------------------------ error dialog
+def _call(app, w, seq, **subs):
+    """Run the handler bound to ``seq`` with %K/%s substitutions; ``"break"`` if it stopped the event."""
+    import re
+    script = w.bind(seq)
+    for k, v in subs.items():
+        script = script.replace("%" + k, str(v))
+    try:
+        app.tk.eval(re.sub(r"%.", "0", script))
+    except tk.TclError as e:
+        return "break" if "break" in str(e) else str(e)
+    return None
+
+
+def test_error_dialog_text_is_selectable_and_copyable(shared_app):
+    top = widgets.error_dialog(shared_app, "Erro", "permission denied on /dev/hidraw1", wait=False)
+    try:
+        assert top.title() == "Erro"
+        txt = next(w for w in walk(top) if isinstance(w, tk.Text))
+        assert txt.get("1.0", "end-1c") == "permission denied on /dev/hidraw1"
+        _call(shared_app, txt, "<Control-a>")
+        assert txt.get("sel.first", "sel.last") == "permission denied on /dev/hidraw1"
+        copy = next(p for p in walk(top) if isinstance(p, widgets.Pill) and p.text == "Copiar")
+        shared_app.clipboard_clear()
+        click(shared_app, copy)
+        assert shared_app.clipboard_get() == "permission denied on /dev/hidraw1"
+    finally:
+        top.destroy()
+
+
+def test_error_dialog_is_read_only_and_closes(shared_app):
+    top = widgets.error_dialog(shared_app, "Erro", "linha 1\nlinha 2", wait=False)
+    txt = next(w for w in walk(top) if isinstance(w, tk.Text))
+    assert _call(shared_app, txt, "<Key>", K="x", s=0) == "break"            # typing
+    assert _call(shared_app, txt, "<Key>", K="v", s=4) == "break"            # Ctrl+V
+    assert _call(shared_app, txt, "<Key>", K="c", s=4) is None               # Ctrl+C passes
+    assert _call(shared_app, txt, "<Key>", K="Left", s=0) is None            # moving around passes
+    for seq in ("<<Cut>>", "<<Paste>>", "<<Clear>>", "<<PasteSelection>>"):
+        assert _call(shared_app, txt, seq) == "break"
+    assert txt.get("1.0", "end-1c") == "linha 1\nlinha 2"
+    _call(shared_app, top, "<Escape>")
+    assert not top.winfo_exists()
+    top = widgets.error_dialog(shared_app, "Erro", "", wait=False)
+    _call(shared_app, top, "<Return>")
+    assert not top.winfo_exists()
+    top = widgets.error_dialog(shared_app, "Erro", "x", wait=False)
+    click(shared_app, next(p for p in walk(top) if isinstance(p, widgets.Pill) and p.text == "OK"))
+    assert not top.winfo_exists()
+
+
+def test_error_dialog_waits_when_modal(shared_app, monkeypatch):
+    seen = []
+    monkeypatch.setattr(tk.Toplevel, "grab_set", lambda self: seen.append("grab"))
+    monkeypatch.setattr(shared_app, "wait_window", lambda w: (seen.append("wait"), w.destroy()))
+    top = widgets.error_dialog(shared_app, "Erro", "x")
+    assert seen == ["grab", "wait"] and not top.winfo_exists()

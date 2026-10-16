@@ -137,7 +137,7 @@ def dlg(monkeypatch):
     d = SimpleNamespace(save="", open="", yes=True, errors=[], asked=[])
     monkeypatch.setattr(sync.filedialog, "asksaveasfilename", lambda **kw: d.save)
     monkeypatch.setattr(sync.filedialog, "askopenfilename", lambda **kw: d.open)
-    monkeypatch.setattr(sync.messagebox, "showerror", lambda *a, **kw: d.errors.append(a))
+    monkeypatch.setattr(sync, "error_dialog", lambda parent, title, msg, s=1.0, wait=True: d.errors.append((title, msg)))
     monkeypatch.setattr(sync.messagebox, "askyesno", lambda *a, **kw: d.asked.append(a) or d.yes)
     # timers the tests do not drive explicitly must not fire behind their back
     monkeypatch.setattr(theme, "POLL_MS", 10 ** 7)

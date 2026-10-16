@@ -41,6 +41,8 @@ def main(argv=None):
             print(f"{path}  {VID:04x}:{pid:04x}  {describe(pid)}  poll={discovery.find_input_node(usb)}")
         if discovery.xinput_u24g():
             print("Ultimate 2.4G in X mode: set the switch on its back to D to configure it")
+        if discovery.bluetooth_u24g():
+            print("Ultimate 2.4G over Bluetooth: no configuration channel there, use the USB cable (switch on D)")
         return
 
     dev = device.Device(a.device)
