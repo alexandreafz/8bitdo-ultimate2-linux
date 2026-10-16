@@ -141,7 +141,7 @@ request : 81 | n | 04 | u16 cmd | u16 sub | u32 len | u32 total | u32 offset | d
 answer  : 02 04 | u16 4 | u16 cmd | u32 len | u32 total | u32 offset | data[len]
 ```
 
-Byte 1 is the size of what follows (the DLL's packet writer), there is no CRC in the header, and only output
+Answers echo `total` and `offset`; a late answer to a request that timed out must be told apart by its offset. Byte 1 is the size of what follows (the DLL's packet writer), there is no CRC in the header, and only output
 reports of 64 bytes are sent (report ID `0x81`). The version query `81 05 00 21 01` answers
 `02 22 | u16 firmware×100 | u8 beta | 0 | u16 pid` (byte 6 is the PID, not an edition). There is no `CMD_INFO`, no LED
 theme and no report on/off.
@@ -161,7 +161,7 @@ theme and no report on/off.
 | `0 + 4s` | 4 | slot flag (`0x20200911` enabled, `0` deleted, `0xffffffff` erased) |
 | 12 | 4 | `crc_value`: the app stores `ANSI_CRC_16_Ultimate2_4` (reflected `0x8408`, init `0xFFFF`, result byte-swapped, over the 1652 bytes as they stand); **the firmware overwrites it with its own save counter** (1, 2, …) |
 | 16 | 2 | `gamepad_mode` (1 with the switch on D) |
-| 18 | 2 | `cur_slot` (4 = no custom profile) |
+| 18 | 2 | `cur_slot` (4 = no custom profile); **the firmware keeps its own value** on writes, so the app reads it first (`getUltimate2_4CurrentSlot`) |
 | `20 + 32s` | 32 | name, **UTF-16LE** (`Encoding.Unicode`), 16 chars |
 | `116 + 12s` | 12 | rumble: flag, `float left`, `float right` |
 | `152 + 8s` | 8 | sticks: flag, left start/end, right start/end (0..128) |

@@ -27,7 +27,7 @@ def u24(monkeypatch):
 @pytest.fixture
 def fast(monkeypatch):
     orig = Device.recv
-    monkeypatch.setattr(Device, "recv", lambda self, cmd, timeout=0.5: orig(self, cmd, min(timeout, 0.2)))
+    monkeypatch.setattr(Device, "recv", lambda self, cmd, timeout=0.5, **kw: orig(self, cmd, min(timeout, 0.2), **kw))
 
 
 def run(*args):
@@ -137,7 +137,10 @@ def test_changed_span_and_same():
     assert (a, b) == (8, SIZE)                                # slot 2 flag .. its macro records, last in the record
     other = bytearray(new)
     other[12:16] = b"\x05\0\0\0"                             # the firmware's save counter
+    other[18:20] = b"\x01\0"                                 # and its own active profile
     assert config.same(new, bytes(other)) and not config.same(new, BLANK)
+    other[16] = 0
+    assert not config.same(new, bytes(other))
     u2 = b"\xff" * p.CFG_SIZE
     assert config.same(u2, u2) and not config.same(u2, b"\0" + u2[1:]) and not config.same(new, u2)
 
@@ -278,3 +281,32 @@ def test_xinput_ignores_other_pads(tmp_path, monkeypatch):
     _event(tmp_path, 4, "3/045e/0b13/1")
     assert not discovery.xinput_u24g()
     assert os.path.isdir(tmp_path / "class" / "input")
+
+
+def test_late_answers_with_another_offset_are_skipped(u24):
+    u24.stale = 6                                            # answers echoing a wrong offset arrive first
+    d = Device()
+    try:
+        assert d.read_config() == BLANK
+        new = config.encode(config.default_slot(config.decode(BLANK), 0, "x"), BLANK)[0]
+        u24.stale = 6
+        d.write_config(new)
+        assert config.same(new, d.read_config()) and u24.stale == 0
+    finally:
+        d.close()
+
+
+def test_write_keeps_the_controllers_active_profile(u24):
+    u24.cfg[18:20] = u24.pending[18:20] = b"\x01\0"           # the profile button was pressed after the read
+    new = config.encode(config.default_slot(config.decode(BLANK), 0, "x"), BLANK)[0]   # still says cur_slot 4
+    d = Device()
+    try:
+        d.write_config(new)
+        assert struct.unpack_from("<H", bytes(u24.cfg), 18)[0] == 1 and config.same(new, d.read_config())
+        u24.silent.add(p.CMD_READ)                           # no answer to the slot read: the record goes as is
+        u24.pending[18:20] = b"\x02\0"
+        d.write_config(new)
+        assert struct.unpack_from("<H", bytes(u24.cfg), 18)[0] == 4
+    finally:
+        d.close()
+

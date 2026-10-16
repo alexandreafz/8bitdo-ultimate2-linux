@@ -14,7 +14,7 @@ from ultimate2.protocol import CFG_SIZE, CMD_COMMIT, CMD_READ, CMD_REPORT, CMD_W
 def fast(monkeypatch):
     """Cap every recv() timeout (default 0.5 s, commit 3 s) so failure paths stay quick."""
     orig = Device.recv
-    monkeypatch.setattr(Device, "recv", lambda self, cmd, timeout=0.5: orig(self, cmd, min(timeout, 0.2)))
+    monkeypatch.setattr(Device, "recv", lambda self, cmd, timeout=0.5, **kw: orig(self, cmd, min(timeout, 0.2), **kw))
 
 
 @pytest.fixture

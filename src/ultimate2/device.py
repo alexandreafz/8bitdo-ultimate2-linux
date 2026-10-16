@@ -60,14 +60,18 @@ class Device:
         else:
             os.write(self.fd, build_request(cmd, sub, data, total, offset, length, with_crc))
 
-    def recv(self, cmd, timeout=0.5):
-        """Wait for the answer to ``cmd``; returns ``(length, data)`` or ``None`` on timeout."""
+    def recv(self, cmd, timeout=0.5, offset=None):
+        """Wait for the answer to ``cmd``; returns ``(length, data)`` or ``None`` on timeout.
+
+        With ``offset``, answers echoing another offset (late answers to a request that timed out) are skipped.
+        """
         end = time.time() + timeout
         while (left := end - time.time()) > 0:
             if not select.select([self.fd], [], [], left)[0]:
                 break
-            r = parse_reply(os.read(self.fd, REPORT_SIZE), cmd)
-            if r:
+            report = os.read(self.fd, REPORT_SIZE)
+            r = parse_reply(report, cmd)
+            if r and (offset is None or struct.unpack_from("<I", report, 14)[0] == offset):
                 return r
         return None
 
@@ -134,10 +138,14 @@ class Device:
         """Active profile (0-2; 3 = default, no custom profile). Reads only the 20-byte header,
         like the app's ``getUltimate2CurrentSlot``."""
         self.send(CMD_READ, total=20, offset=0, length=20)
-        r = self.recv(CMD_READ)
+        r = self.recv(CMD_READ, **self._echo(0))
         return struct.unpack_from("<H", r[1], 18)[0] if r and r[0] >= 20 else None
 
     # ------------------------------------------------------------ config record
+    def _echo(self, offset):
+        """``recv`` arguments: the Ultimate 2.4G echoes the offset (checked), the Ultimate 2 is matched by command."""
+        return {"offset": offset} if self.model is protocol.U24G else {}
+
     def read_config(self):
         """The whole config record (1592 bytes on the Ultimate 2, 1652 on the Ultimate 2.4G)."""
         size = self.model.cfg_size
@@ -145,7 +153,7 @@ class Device:
         tries = 0
         while len(buf) < size:
             self.send(CMD_READ, total=size, offset=len(buf), length=min(CHUNK, size - len(buf)))
-            r = self.recv(CMD_READ)
+            r = self.recv(CMD_READ, **self._echo(len(buf)))
             if not r or r[0] == 0:
                 tries += 1
                 if tries >= RETRIES:
@@ -165,6 +173,9 @@ class Device:
         size = self.model.cfg_size
         if self.model is protocol.U24G:
             start, end = 0, size
+            slot = self.current_slot()           # the app refreshes cur_slot first (getUltimate2_4CurrentSlot):
+            if slot is not None:                 # the profile button may have changed it since the record was read
+                data = data[:18] + struct.pack("<H", slot) + data[20:]
         elif end is None:
             end = size
         assert len(data) == size and 0 <= start < end <= size
@@ -172,7 +183,7 @@ class Device:
         off, tries = start, 0
         while off < end:
             self.send(CMD_WRITE, data=data[off:min(off + CHUNK, end)], total=size, offset=off)
-            r = self.recv(CMD_WRITE)
+            r = self.recv(CMD_WRITE, **self._echo(off))
             if not r or r[0] == 0:
                 tries += 1
                 if tries >= RETRIES:

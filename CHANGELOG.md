@@ -8,6 +8,9 @@ This project follows [Semantic Versioning](https://semver.org/).
   `2dc8:3013` is untested): profiles, buttons with the P1/P2 back buttons, sticks, triggers, rumble and backups in
   `u2ctl` and `u2gui`. Its protocol, from *Ultimate Software V1*, is in `docs/PROTOCOL.md`. `u2gui` hides the gyro and
   LED pages for it, and both tools say when the controller is on X (`2dc8:3106`), where it cannot be configured.
+* Ultimate 2.4G writes: answers are matched by the offset they echo, the active profile is read from the controller
+  just before writing, and verification ignores the two fields its firmware owns (save counter, active profile). Fixes
+  “verificação falhou” after changing a button.
 * `tools/probe_u24g.py`: read-only check of an Ultimate 2.4G (version and the whole record, saved to a file).
 
 ## 0.1.0-beta.6 — 2026-10-15

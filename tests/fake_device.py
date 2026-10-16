@@ -23,6 +23,7 @@ class FakeController:
         self.edition = 3
         self.pad = None            # through the dongle: {"battery", "firmware", "edition"} of the controller
         self.saves = 0             # Ultimate 2.4G: its firmware stores a save counter in crc_value
+        self.stale = 0             # Ultimate 2.4G: precede the next N read/write answers with one for another offset
         self.host, self._dev = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         self._t = threading.Thread(target=self._serve, daemon=True)
         self._t.start()
@@ -121,8 +122,11 @@ class FakeController:
             return
         if cmd in self.silent:
             return
-        reply = lambda data=b"", n=None: self._dev.send((b"\x02\x04" + struct.pack(
-            "<HHIII", 4, cmd, len(data) if n is None else n, total, off) + data).ljust(64, b"\0"))
+        reply = lambda data=b"", n=None, at=off: self._dev.send((b"\x02\x04" + struct.pack(
+            "<HHIII", 4, cmd, len(data) if n is None else n, total, at) + data).ljust(64, b"\0"))
+        if self.stale and cmd in (u.CMD_READ, u.CMD_WRITE):
+            self.stale -= 1
+            reply(b"\xee" * length if cmd == u.CMD_READ else b"", n=length, at=off + 1000)
         if cmd == u.CMD_READ:
             reply(bytes(self.cfg[off:off + length]))
         elif cmd == u.CMD_WRITE:

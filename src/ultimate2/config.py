@@ -191,11 +191,11 @@ def changed_span(old, new):
 
 
 def same(written, read):
-    """Did the controller keep ``written``? The Ultimate 2.4G firmware stores its own ``crc_value`` when it saves
-    (1 after the first save), so that field is not compared there."""
+    """Did the controller keep ``written``? The Ultimate 2.4G firmware owns two fields: it stores its own
+    ``crc_value`` when it saves (a save counter) and keeps its own ``cur_slot``; they are not compared there."""
     if len(written) == U24G_CFG_SIZE == len(read):
-        a, b = CRC_FIELD
-        return written[:a] + written[b:] == read[:a] + read[b:]
+        own = lambda b: b[:12] + b[16:18] + b[20:]
+        return own(written) == own(read)
     return written == read
 
 
