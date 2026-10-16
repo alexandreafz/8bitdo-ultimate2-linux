@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## 0.1.0-beta.6+u24g5 — 2026-10-16
+## 0.1.0-beta.6+u24g6 — 2026-10-16
 
 * Support for the **8BitDo Ultimate 2.4G** (the first Ultimate), with its mode switch on D (`2dc8:3012`; the dongle
   `2dc8:3013` is untested): profiles, buttons with the P1/P2 back buttons, sticks, triggers, rumble and backups in
@@ -13,6 +13,10 @@ This project follows [Semantic Versioning](https://semver.org/).
   “verificação falhou” after changing a button.
 * `u2gui` no longer reports “verificação falhou” when it creates a profile on the Ultimate 2.4G: the saved record is
   compared whole, minus the save counter and active profile its firmware keeps.
+* Ultimate 2.4G on X no longer switches itself off after a profile change: xpad only polls a pad while a program
+  reads it, and the receiver (which re-enumerates on every profile switch on X) drops a controller nobody polls
+  within ~5 s. `u2ctl keepalive`, run by the new systemd user service `ultimate2-keepalive` (enabled for every
+  user, starts at login), keeps it read like Windows does.
 * **Ultimate 2.4G on X (2.4G receiver or cable): its X configuration can now be edited.** Replaying what Windows
   sends (found with a USBPcap capture: the xusb22 `02 08 03` packet, then the app's rumble knock) opens the config
   channel (`2dc8:3013` receiver / `3012` cable); `81 05 00 51 02` goes back to X. `u2gui` does it by itself and

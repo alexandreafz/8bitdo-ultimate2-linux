@@ -201,3 +201,10 @@ starts it sends the knock `00 08 00 L R 00 00 00` with (1,0) (0,1) (1,1) (5,1) (
 read there has `gamepad_mode` 3 (the X configuration). `81 05 00 51 02` on that channel brings it back to `3106`.
 Replayed over usbfs (`ultimate2/xmode.py`, after detaching xpad) the same bytes work on Linux.
 
+### Staying connected on X
+
+On X, a profile switch makes the receiver re-enumerate (`3106` → `3109` → `3106`). Windows polls the pad's interrupt
+endpoint all the time; Linux' xpad only does while a program has the input node open. Without a reader the receiver
+drops the controller again ~5 s after each reconnection and finally switches it off. Keeping the joystick node open
+(`u2ctl keepalive`) fixes it.
+
