@@ -2,9 +2,8 @@
 import time
 import tkinter.font as tkfont
 
-from .. import config
 from . import theme
-from .catalog import DISPLAY
+from .live_input import JS_LAYOUTS
 from .drawing import gradient_fill, led_frame, mix, rounded, rr_points, set_color, smooth_outline, stadium
 from .geometry import (BEHIND, BODY, CALLOUTS, DECOR, DECOR_SQUARE, DETAILS, DPAD_ARM, DPAD_CENTER, DPAD_CROSS,
                        DPAD_HALF, HEART, HEART_PX, HEIGHT, HOME_OFFSET, PARTS, RINGS, ROLES, STICK_WELLS, WIDTH)
@@ -42,6 +41,7 @@ class ControllerView:
 
         def make(name):
             shape, xy, label = PARTS[name]
+            label = self.display.get(name, label)       # P1/P2 printed as PR/PL on the Ultimate 2
             tag = f"b:{name}"
             base = sk[ROLES.get(name, "btn")]
             pts = None
@@ -126,11 +126,12 @@ class ControllerView:
                              outline=sk["line"] if line else sk["btn"][1], width=w if y2 - y1 > 2 else 1)
         rounded(c, *P(*DECOR_SQUARE), 1.5 * s, fill="", outline=sk["line"] if line else sk["btn"][2], width=max(1, w - 1))
         leds, glow = [], []
-        for ring, (x, y, r) in enumerate(RINGS):          # soft halo behind the light ring
+        rings = RINGS if self.model.leds else []          # the Ultimate 2.4G has no LED rings
+        for ring, (x, y, r) in enumerate(rings):          # soft halo behind the light ring
             for i in range(12):
                 glow.append(c.create_arc(P(x - r, y - r, x + r, y + r), start=90 - 30 * i - 15, extent=30, style="arc",
                                          outline=sk["led_off"], width=(2 if line else 11) * s))
-        for ring, (x, y, r) in enumerate(RINGS):
+        for ring, (x, y, r) in enumerate(rings):
             for i in range(12):
                 item = c.create_arc(P(x - r, y - r, x + r, y + r), start=90 - 30 * i - 15.5, extent=31, style="arc",
                                     outline=sk["led_off"], width=(6 if mode == "leds" else 4.5) * s)
@@ -142,7 +143,7 @@ class ControllerView:
         self.led_items.append((c, leds))
         self.led_glow[c] = glow
         for name in PARTS:
-            if name not in BEHIND:
+            if name not in BEHIND and name in self.buttons:      # no L4/R4 on the Ultimate 2.4G
                 make(name)
         if line:                                            # hollow rounded cross with an X, over the d-pad parts
             half = DPAD_HALF
@@ -174,7 +175,9 @@ class ControllerView:
         """Labels around the home drawing, linked to their part; clicking one opens its page."""
         s = self.s
         for text, side, y, (tx, ty), target in CALLOUTS:
-            label = _(text)
+            if target not in self.buttons and target != "sticks":
+                continue                                  # L4/R4 on the Ultimate 2.4G
+            label = _(text) if target != "P1" else _(text).replace("PL / PR", " / ".join(self.display[b] for b in ("P2", "P1")))
             f = tkfont.Font(root=c, font=theme.font(9, "bold"))
             w, h = f.measure(label) / s + 26, 22
             x1 = 6 if side == "l" else 2 * ox + WIDTH - 6 - w
@@ -241,7 +244,7 @@ class ControllerView:
 
     def trigger_level(self, name):
         """0..1 pressure of LT/RT from the joystick axes (js reports -32767 released .. 32767 full)."""
-        axis = {"LT": 2, "RT": 5}.get(name)
+        axis = {n: a for a, n in JS_LAYOUTS[self.model.key]["triggers"].items()}.get(name)
         return None if axis is None else (self.pad_axes.get(axis, -32767) + 32767) / 65534
 
     def style(self, c, parts, mode, now):
@@ -249,7 +252,7 @@ class ControllerView:
         s = self.s
         for name, p in parts.items():
             # the extras (L4/R4/PL/PR) send no input of their own: light them when the function they output arrives
-            fn = self.v["keys"][name].get() if name in DISPLAY else name
+            fn = self.v["keys"][name].get() if name in self.display else name
             level = self.trigger_level(fn)
             if name in self.pad_down or fn in self.pad_down:
                 st = (ACCENT, ACCENT, BG)
@@ -285,7 +288,7 @@ class ControllerView:
                 c.itemconfigure(p["glow"], state="hidden")
                 p["glowing"] = False
             if name in ("L3", "R3"):
-                ax = (0, 1) if name == "L3" else (3, 4)
+                ax = JS_LAYOUTS[self.model.key]["sticks"][name]
                 tx, ty = (self.pad_axes.get(a, 0) / 32767 * 6 * s for a in ax)
                 dx, dy = tx - p["off"][0], ty - p["off"][1]
                 if abs(dx) + abs(dy) > .5:
@@ -302,10 +305,10 @@ class ControllerView:
     def refresh_mapping(self):
         """Badge every button whose function differs from its default; update the side panel."""
         dflt = self._defaults(self.slot)["mapping"] if self.doc else {}
-        self._remapped = {b for b in config.BUTTONS if dflt and self.v["keys"][b].get() != dflt[b]}
+        self._remapped = {b for b in self.buttons if dflt and self.v["keys"][b].get() != dflt[b]}
         cur = self.v["keys"][self.sel_btn].get()
-        self.map_title.configure(text=_("Botão {}").format(DISPLAY.get(self.sel_btn, self.sel_btn)))
-        self.map_sub.configure(text=_("função atual: {}").format(DISPLAY.get(cur, cur) or "—"))
+        self.map_title.configure(text=_("Botão {}").format(self.display.get(self.sel_btn, self.sel_btn)))
+        self.map_sub.configure(text=_("função atual: {}").format(self.display.get(cur, cur) or "—"))
         now = time.time()
         for c, (parts, mode) in self.ctrl.items():
             self.style(c, parts, mode, now)

@@ -34,6 +34,15 @@ for Windows/macOS. It talks to the controller directly over `/dev/hidraw`. You g
 Tested with an Ultimate 2 Wireless (firmware 1.10) over USB (`2dc8:310b`). The 2.4G dongle (`2dc8:6013`) speaks
 the same protocol once the controller is paired, but this has not been tested yet.
 
+### 8BitDo Ultimate 2.4G (the first Ultimate)
+
+The older **Ultimate 2.4G Wireless** (with charging dock, configured on Windows by *Ultimate Software V1*) is
+supported too: buttons (including the P1/P2 back buttons), sticks, triggers, rumble, the 3 profiles and backups. It has
+no LEDs or gyro, so those pages are hidden. **Set the mode switch on the back of the controller to D**: on X it is
+an XInput pad (`2dc8:3106`) without the configuration channel, and the tools say so. On D it shows up as
+`2dc8:3012` (USB cable; `2dc8:3013` is the dongle, not tested). Tested with firmware 2.04 over USB: profile
+created, A/B swapped and seen on the joystick, then restored. See [the protocol notes](docs/PROTOCOL.md#8bitdo-ultimate-24g).
+
 ## Install
 
 ### Debian / Ubuntu (.deb) — recommended

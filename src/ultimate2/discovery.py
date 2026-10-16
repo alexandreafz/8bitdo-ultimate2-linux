@@ -18,7 +18,11 @@ def _read(path):
 
 
 def find_devices():
-    """Yield ``(hidraw_path, pid, usb_dir)`` for every 8BitDo vendor config interface."""
+    """Yield ``(hidraw_path, pid, usb_dir)`` for every 8BitDo vendor config interface.
+
+    The Ultimate 2.4G (mode switch on D) has a single HID interface, the gamepad, which also carries the config
+    reports: it is recognised by its PID instead of a vendor usage page.
+    """
     for d in sorted(glob.glob(SYS + "/class/hidraw/hidraw*")):
         ue = _read(d + "/device/uevent").decode(errors="replace")
         hid_id = next((l.split("=")[1] for l in ue.splitlines() if l.startswith("HID_ID=")), "")
@@ -26,7 +30,8 @@ def find_devices():
             _, vid, pid = (int(x, 16) for x in hid_id.split(":"))
         except ValueError:
             continue
-        if vid != protocol.VID or _read(d + "/device/report_descriptor")[:3] not in CONFIG_DESCRIPTORS:
+        if vid != protocol.VID or (pid not in protocol.U24G_PIDS
+                                   and _read(d + "/device/report_descriptor")[:3] not in CONFIG_DESCRIPTORS):
             continue
         usb_dir = os.path.dirname(os.path.dirname(os.path.realpath(d + "/device")))
         yield DEV + "/" + os.path.basename(d), pid, usb_dir
@@ -43,3 +48,18 @@ def find_input_node(usb_dir):
             if os.path.realpath(n + "/device").startswith(usb_dir + "/"):
                 return DEV + "/input/" + os.path.basename(n)
     return None
+
+
+def xinput_u24g():
+    """``True`` if an Ultimate 2.4G is plugged in with its mode switch on X (no config interface)."""
+    want = {f"product=3/{protocol.VID:04x}/{p:04x}/" for p in protocol.U24G_XINPUT_PIDS}
+    return any(any(w in _read(e + "/device/uevent").decode(errors="replace").lower() for w in want)
+               for e in sorted(glob.glob(SYS + "/class/input/event*")))
+
+
+def connected_model():
+    """Model of the first controller found (sysfs only, no I/O); the Ultimate 2 when nothing is plugged in."""
+    dev = next(find_devices(), None)
+    if dev:
+        return protocol.model_for_pid(dev[1])
+    return protocol.U24G if xinput_u24g() else protocol.U2

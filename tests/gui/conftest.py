@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from conftest import BLANK_CONFIG
-from ultimate2 import config, device
+from ultimate2 import config, device, protocol
 from ultimate2.gui import app as app_mod, i18n, sync, theme
 
 BACKUP = open(BLANK_CONFIG, "rb").read()
@@ -154,6 +154,7 @@ def shared_app():
         def boom(*a, **k):
             raise AssertionError("real device access")
         mp.setattr(device, "Device", boom)
+        mp.setattr(app_mod.discovery, "connected_model", lambda: protocol.U2)    # not the machine's controller
         mp.setattr(app_mod.threading, "Thread", no_thread)
         mp.setattr(theme, "POLL_MS", 10 ** 7)
         mp.setattr(theme, "FRAME_MS", 10 ** 7)

@@ -5,11 +5,12 @@ import struct
 import sys
 
 from . import config, device, discovery
-from .protocol import CFG_SIZE, PIDS, THEMES, VID
+from .protocol import THEMES, VID, describe
 
 
 def parser():
-    ap = argparse.ArgumentParser(prog="u2ctl", description="Configure the 8BitDo Ultimate 2 Wireless on Linux.")
+    ap = argparse.ArgumentParser(prog="u2ctl", description="Configure the 8BitDo Ultimate 2 Wireless and the Ultimate 2.4G "
+                                                          "(mode switch on D) on Linux.")
     ap.add_argument("-d", "--device", help="hidraw node (default: auto-detect)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="list detected devices")
@@ -23,7 +24,7 @@ def parser():
     p.add_argument("slot", type=int, choices=range(3))
     p.add_argument("--name", default="Linux")
     p.add_argument("-n", "--dry-run", action="store_true")
-    p = sub.add_parser("theme", help="show or set the active LED theme")
+    p = sub.add_parser("theme", help="show or set the active LED theme (Ultimate 2 only)")
     p.add_argument("name", nargs="?", choices=list(THEMES.values()))
     p = sub.add_parser("backup", help="save raw config record")
     p.add_argument("file")
@@ -37,7 +38,9 @@ def main(argv=None):
 
     if a.cmd == "list":
         for path, pid, usb in discovery.find_devices():
-            print(f"{path}  {VID:04x}:{pid:04x}  {PIDS.get(pid, '?')}  poll={discovery.find_input_node(usb)}")
+            print(f"{path}  {VID:04x}:{pid:04x}  {describe(pid)}  poll={discovery.find_input_node(usb)}")
+        if discovery.xinput_u24g():
+            print("Ultimate 2.4G in X mode: set the switch on its back to D to configure it")
         return
 
     dev = device.Device(a.device)
@@ -45,9 +48,9 @@ def main(argv=None):
         i = dev.info() or sys.exit("no answer from controller")
         cfg = dev.read_config()
         mode, slot = struct.unpack_from("<HH", cfg, 16)
-        print(f"device      {dev.path} ({VID:04x}:{dev.pid:04x} {PIDS.get(dev.pid, '?')})")
+        print(f"device      {dev.path} ({VID:04x}:{dev.pid:04x} {describe(dev.pid)}, {dev.model.name})")
         print(f"firmware    {i['firmware'] / 100:.2f}" + (f" beta {i['beta']}" if i["beta"] else ""))
-        print(f"report pid  0x{i['device_pid']:04x} ({PIDS.get(i['device_pid'], '?')})")
+        print(f"report pid  0x{i['device_pid']:04x} ({describe(i['device_pid'])})")
         print(f"mode/slot   gamepad_mode={mode} cur_slot={slot}")
         pad = dev.pad_status()
         if pad:                                    # 2.4G: the controller behind the dongle
@@ -70,10 +73,12 @@ def main(argv=None):
         print("changed:", *changed or ["(nothing)"], sep="\n  ")
         if changed and not a.dry_run:
             dev.write_config(new)
-            if dev.read_config() != new:
+            if not config.same(new, dev.read_config()):
                 sys.exit("verify failed: controller config differs from what was written")
             print("saved and verified")
     elif a.cmd == "theme":
+        if not dev.model.leds:
+            sys.exit(f"the {dev.model.name} has no LED themes")
         if a.name:
             dev.set_theme(next(k for k, v in THEMES.items() if v == a.name))
         t = dev.get_theme()
@@ -81,13 +86,13 @@ def main(argv=None):
     elif a.cmd == "backup":
         with open(a.file, "wb") as f:
             f.write(dev.read_config())
-        print(f"saved {CFG_SIZE} bytes to {a.file}")
+        print(f"saved {dev.model.cfg_size} bytes to {a.file}")
     elif a.cmd == "restore":
         with open(a.file, "rb") as f:
             data = f.read()
-        if len(data) != CFG_SIZE:
-            sys.exit(f"{a.file}: expected {CFG_SIZE} bytes, got {len(data)}")
+        if len(data) != dev.model.cfg_size:
+            sys.exit(f"{a.file}: expected {dev.model.cfg_size} bytes for the {dev.model.name}, got {len(data)}")
         dev.write_config(data)
-        if dev.read_config() != data:
+        if not config.same(data, dev.read_config()):
             sys.exit("verify failed: controller config differs from the backup")
         print("restored")

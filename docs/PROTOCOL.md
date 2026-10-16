@@ -112,3 +112,74 @@ triggers, `0x100` swap LS/d-pad, `0x8000` trigger rumble. Other bits are not ful
 
 With `xpad`, `/dev/input/jsN` reports 11 buttons (`A B X Y LB RB Select Start Home L3 R3`) and 8 axes (LX, LY, LT, RX,
 RY, RT, d-pad X, d-pad Y). Star, L4/R4 and the PL/PR back buttons are not reported as separate inputs.
+
+## 8BitDo Ultimate 2.4G
+
+The first Ultimate (*Ultimate 2.4G Wireless*, `PID_Ultimate2_4` in *8BitDo Ultimate Software V1*, build of
+2024-07-31) uses the same command numbers with a different frame, record and save key. It was reverse-engineered
+from the V1 app (`8BitDoAdvance.dll`: `readUltimate2_4`, `writeUltimate2_4`, `getUltimate2_4CurrentSlot`,
+`ANSI_CRC_16_Ultimate2_4`, decompiled with Ghidra through REA; the .NET assembly with ILSpy) and verified on a
+controller with firmware 2.04 over USB.
+
+### Mode switch
+
+| Switch | USB ID | What Linux sees |
+|---|---|---|
+| X | `2dc8:3106` | XInput pad (`xpad`), one vendor-specific interface, **no config channel** |
+| D | `2dc8:3012` | one HID interface (generic gamepad) that also carries the config reports |
+| D, through the dongle | `2dc8:3013` (`PID_Ultimate2_4RR`) | not tested |
+
+The V1 app tries to move XInput pads to D by playing a rumble "knock" (`Xinput.subXinput_C`: motor values
+0, 0, .006/0, 0/.006, .006/.006, .022/.006, 0 → bytes `(0,0) (0,0) (1,0) (0,1) (1,1) (5,1) (0,0)`, 10 ms apart)
+and sends `81 05 00 51 02` on exit to go back to XInput. Sent through `xpad` force feedback the knock reaches the
+controller byte for byte (checked with usbmon), but firmware 2.04 ignores it: use the switch.
+
+### Frames
+
+```
+request : 81 | n | 04 | u16 cmd | u16 sub | u32 len | u32 total | u32 offset | data[len]   (n = 17 + len, len ≤ 45)
+answer  : 02 04 | u16 4 | u16 cmd | u32 len | u32 total | u32 offset | data[len]
+```
+
+Byte 1 is the size of what follows (the DLL's packet writer), there is no CRC in the header, and only output
+reports of 64 bytes are sent (report ID `0x81`). The version query `81 05 00 21 01` answers
+`02 22 | u16 firmware×100 | u8 beta | 0 | u16 pid` (byte 6 is the PID, not an edition). There is no `CMD_INFO`, no LED
+theme and no report on/off.
+
+| cmd | sub | Meaning |
+|---|---|---|
+| 2 | 0 | read `len` bytes at `offset` (`total` = 1652; a 20-byte read at 0 gives `cur_slot`) |
+| 1 | 0 | write; the app always writes the whole record |
+| 6 | `0x15` | save to flash; the answer comes within ~3 s |
+
+### Config record (1652 bytes)
+
+`custom_config_record_t` of `Ultimate2_4Advance`, three slots `s`:
+
+| Offset | Size | Field |
+|---|---|---|
+| `0 + 4s` | 4 | slot flag (`0x20200911` enabled, `0` deleted, `0xffffffff` erased) |
+| 12 | 4 | `crc_value`: the app stores `ANSI_CRC_16_Ultimate2_4` (reflected `0x8408`, init `0xFFFF`, result byte-swapped, over the 1652 bytes as they stand); **the firmware overwrites it with its own save counter** (1, 2, …) |
+| 16 | 2 | `gamepad_mode` (1 with the switch on D) |
+| 18 | 2 | `cur_slot` (4 = no custom profile) |
+| `20 + 32s` | 32 | name, **UTF-16LE** (`Encoding.Unicode`), 16 chars |
+| `116 + 12s` | 12 | rumble: flag, `float left`, `float right` |
+| `152 + 8s` | 8 | sticks: flag, left start/end, right start/end (0..128) |
+| `176 + 8s` | 8 | triggers: flag, LT start/end, RT start/end (0..255) |
+| `200 + 8s` | 8 | special: flag, feature bits (same bits as above) |
+| `224 + 84s` | 84 | mapping: flag, 20 × u32: `A B X Y LB RB LT RT L3 R3 Select Start Star Home Up Down Left Right P1 P2` |
+| `476 + 392s` | 392 | macros: flag, `u8 total_cnt`, 4 × 96-byte records (`key_map`, 18 × u16 interval, 18 × u16 key, 18 × u8 d-pad, `max_index`) |
+
+Key codes are those of the table above for `A B X Y LB RB LT RT L3 R3 Select Start Up Down Left Right` (RT `0x8000`,
+Home `0x20000`: the app's `AutoR2AndHome` → `changeKey`), plus Menu `0x10000`, Screenshot `0x400000`, Turbo
+`0x800000`/`0x1000000`, P1 `0x2000000`, P2 `0x4000000` and Swap `0x8000000`; there are no stick directions.
+
+A new profile (the app's `clear*` functions, then `enableFlagWithrecord`): identity mapping with Star = Menu
+(Screenshot in mode 0) and P1/P2 = none, rumble 1.0/1.0, sticks 0..128, triggers 0..255, features 0, macro count 0
+and the four macro records zeroed; the slot flag and every section flag are set to `0x20200911`.
+
+### Live input (switch on D)
+
+`/dev/input/jsN` has 16 buttons — A 0, B 1, X 3, Y 4, LB 6, RB 7, LT 8, RT 9, Select 10, Start 11, Home 12, L3 13,
+R3 14 (Star sends nothing) — and 8 axes: LX 0, LY 1, RX 2, RY 3, RT 4, LT 5, d-pad hat 6/7.
+

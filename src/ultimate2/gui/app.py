@@ -6,9 +6,8 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
-from .. import config
-from . import i18n, theme
-from .catalog import SECTIONS
+from .. import discovery
+from . import catalog, i18n, theme
 from .controller import ControllerView
 from .editor import Editor
 from .i18n import _
@@ -17,6 +16,7 @@ from .pages import Pages
 from .sync import DeviceSync
 from .theme import BG, DEFAULT_SKIN, EDITION_SKINS, FG, MUTED, SKINS, TILE, WARN
 from .widgets import Pill, Select, panel
+from ..config import FEATURES
 
 SETTINGS = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "ultimate2", "gui.json")
 
@@ -46,7 +46,9 @@ class App(Pages, ControllerView, Editor, DeviceSync, PadInput, tk.Tk):
         lang = load_settings().get("lang")
         i18n.LANG = lang if lang in i18n.LANGS else i18n.system_lang()
         self.restart = False
-        self.title("8BitDo Ultimate 2 — Linux")
+        self.model = discovery.connected_model()      # what to build for; a different one read later restarts
+        self.sections, self.buttons, self.key_names, self.display = catalog.for_model(self.model)
+        self.title(f"8BitDo {self.model.name} — Linux")
         self.configure(bg=BG)
         theme.FAMILY = theme.pick_family(self)
         # UI scale from the real font size (desktop DPI/font scaling); 10pt Sans is ~15px tall at 96 dpi
@@ -120,9 +122,9 @@ class App(Pages, ControllerView, Editor, DeviceSync, PadInput, tk.Tk):
     def _vars(self):
         V, I, B = tk.StringVar, tk.IntVar, tk.BooleanVar
         side = ("left_start", "left_end", "right_start", "right_end")
-        self.v = {"name": V(), "enabled": B(), "keys": {b: V() for b in config.BUTTONS},
+        self.v = {"name": V(), "enabled": B(), "keys": {b: V() for b in self.buttons},
                   "sticks": {k: I() for k in side}, "triggers": {k: I() for k in side}, "xr": {k: I() for k in side},
-                  "feat": {f: B() for f in config.FEATURES.values()},
+                  "feat": {f: B() for f in FEATURES.values()},
                   "rumble_l": I(), "rumble_r": I(),
                   "gyro_type": I(), "gyro_mode": I(), "gyro_sens": I(), "gyro_dead": I(), "gyro_key": V(),
                   "hot_speed": I(), "theme": I()}
@@ -175,7 +177,7 @@ class App(Pages, ControllerView, Editor, DeviceSync, PadInput, tk.Tk):
         self.pages = {"home": self._p_home(body)}
         builders = {"buttons": self._p_buttons, "sticks": self._p_sticks, "triggers": self._p_triggers,
                     "rumble": self._p_rumble, "gyro": self._p_gyro, "leds": self._p_leds, "profile": self._p_profile}
-        for title, key in SECTIONS:
+        for title, key in self.sections:
             page = tk.Frame(body, bg=BG)
             top = tk.Frame(page, bg=BG, height=int(46 * s))
             top.pack(fill="x", padx=int(24 * s), pady=(int(10 * s), int(6 * s)))

@@ -2,7 +2,7 @@
 import copy
 
 from .. import config
-from .catalog import GYRO_KEYS, KEY_NAMES, LED_TARGETS
+from .catalog import GYRO_KEYS, LED_TARGETS
 from .drawing import set_color
 from .i18n import _
 from .theme import ACCENT, FG, LINE, TILE_HI
@@ -33,10 +33,10 @@ class Editor:
         self.profile_note.configure(text="" if enabled else
                                     _("Este perfil está vazio: os valores são os padrões do app. Ele é criado assim que você mudar algo."))
         dflt = self._defaults(n)
-        for b in config.BUTTONS:
+        for b in self.buttons:
             k = s["mapping"].get(b)
-            v["keys"][b].set(k if k in KEY_NAMES else dflt["mapping"][b])
-        for sec, key in (("sticks", "sticks"), ("triggers", "triggers"), ("xr", "xinput_rumble")):
+            v["keys"][b].set(k if k in self.key_names else dflt["mapping"][b])
+        for sec, key in self._ranges():
             for k, var in v[sec].items():
                 var.set(s[key][k] if s[key]["flag"] == "enabled" else dflt[key][k])
         feats = s["special"]["features"] if isinstance(s["special"]["features"], list) else []
@@ -45,6 +45,18 @@ class Editor:
         for side in ("left", "right"):
             x = s["rumble"][side]
             v[f"rumble_{side[0]}"].set(round((x if x is not None else 1.0) * 5))
+        if self.model.gyro:
+            self._load_u2(s, dflt)
+        self.select_button(self.sel_btn)
+
+    def _ranges(self):
+        """Range sections edited as start/end sliders: ``(variable group, record section)``."""
+        r = (("sticks", "sticks"), ("triggers", "triggers"))
+        return r + (("xr", "xinput_rumble"),) if self.model.leds else r
+
+    def _load_u2(self, s, dflt):
+        """Gyro and LEDs (Ultimate 2 only)."""
+        v = self.v
         g = s["sixaxis"]
         v["gyro_type"].set(g["mapping_type"] if g["flag"] == "enabled" and g["mapping_type"] in (1, 2) else 0)
         v["gyro_mode"].set(g["trigger_mode"] if g["trigger_mode"] in (1, 2) else 1)
@@ -61,7 +73,6 @@ class Editor:
             self.paint(k)
         self.picker.set(self._color_of(self.color_target))
         self.refresh_targets()
-        self.select_button(self.sel_btn)
 
     def gather(self):
         """Write widget values into ``self.doc`` for the current slot (mirrors the app's ``saveCurrentConfig``)."""
@@ -75,13 +86,20 @@ class Editor:
         on = "enabled"
         s["flag"] = on
         s["name"] = v["name"].get()[:16]
-        s["mapping"] = dict(flag=on, **{b: v["keys"][b].get() for b in config.BUTTONS})
-        for sec, key in (("sticks", "sticks"), ("triggers", "triggers"), ("xr", "xinput_rumble")):
+        s["mapping"] = dict(flag=on, **{b: v["keys"][b].get() for b in self.buttons})
+        for sec, key in self._ranges():
             s[key] = dict(flag=on, **{k: var.get() for k, var in v[sec].items()})
         old = s["special"]["features"] if isinstance(s["special"]["features"], list) else []
         keep = [f for f in old if f not in config.FEATURES.values()]       # unknown bits survive untouched
         s["special"] = dict(flag=on, features=keep + [f for f, var in v["feat"].items() if var.get()])
         s["rumble"] = dict(flag=on, left=v["rumble_l"].get() / 5, right=v["rumble_r"].get() / 5)
+        if self.model.gyro:
+            self._gather_u2(s)
+        self.doc["slots"][n] = s
+
+    def _gather_u2(self, s):
+        """Gyro and LEDs (Ultimate 2 only)."""
+        v, on = self.v, "enabled"
         t = v["gyro_type"].get()
         s["sixaxis"] = dict(flag=on if t else "disabled", keys_map=f"0x{GYRO_KEYS[v['gyro_key'].get()]:08x}",
                             trigger_mode=v["gyro_mode"].get(), sensitivity=v["gyro_sens"].get(),
@@ -90,7 +108,6 @@ class Editor:
         s["led_dynamic"] = dict(flag=on, color=c["dyn_color"], bg_color=c["dyn_bg"])
         s["led_hotwheel"] = dict(flag=on, color=c["hot_color"], bg_color=c["hot_bg"], speed=v["hot_speed"].get())
         s["led_single"] = dict(flag=on, colors=[c[f"single{i}"] for i in range(24)])
-        self.doc["slots"][n] = s
 
     # ------------------------------------------------------------ LED colours
     def _color_of(self, key):

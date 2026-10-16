@@ -15,6 +15,20 @@ assert set(KEY_NAMES) == set(config.KEYCODES.values())
 # the function they are mapped to (none by default)
 DISPLAY = {"P1": "PR", "P2": "PL", "P3": "L4", "P4": "R4"}
 
+# Ultimate 2.4G: no gyro, LEDs, L4/R4 or stick directions; its back paddles are printed P1 (right) and P2 (left)
+KEY_NAMES_U24G = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "L3", "R3", "Select", "Start", "Home", "Menu",
+                  "Up", "Down", "Left", "Right", "P1", "P2", "TurboSingle", "TurboAuto", "None"]
+assert set(KEY_NAMES_U24G) <= set(config.KEYCODES_U24G.values())
+DISPLAY_U24G = {"P1": "P1", "P2": "P2"}
+
+
+def for_model(model):
+    """``(sections, buttons, key names, display names)`` of the interface for ``model``."""
+    if model.key == "u24g":
+        return [x for x in SECTIONS if x[1] not in ("gyro", "leds")], config.BUTTONS_U24G, KEY_NAMES_U24G, DISPLAY_U24G
+    return SECTIONS, config.BUTTONS, KEY_NAMES, DISPLAY
+
+
 # gyro activation buttons (same codes as the remap table)
 GYRO_KEYS = {"LT": 0x4000, "RT": 0x8000, "LB": 0x400, "RB": 0x800, "L3": 0x2, "R3": 0x4}
 

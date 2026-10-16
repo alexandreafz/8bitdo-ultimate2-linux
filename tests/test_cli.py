@@ -132,7 +132,7 @@ def test_backup_restore(seeded, monkeypatch, capsys, tmp_path):
 def test_restore_wrong_size(seeded, monkeypatch, tmp_path):
     f = tmp_path / "short.bin"
     f.write_bytes(b"abc")
-    with pytest.raises(SystemExit, match="expected 1592 bytes, got 3"):
+    with pytest.raises(SystemExit, match="expected 1592 bytes for the Ultimate 2 Wireless, got 3"):
         run(monkeypatch, "restore", str(f))
 
 

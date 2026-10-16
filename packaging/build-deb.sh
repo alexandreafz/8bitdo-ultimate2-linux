@@ -3,7 +3,7 @@
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/pyproject.toml" | sed 's/b\([0-9]*\)$/~beta\1/')
+VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/pyproject.toml" | sed 's/b\([0-9]*\)/~beta\1/')
 PKG=ultimate2
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
@@ -42,10 +42,11 @@ Depends: python3 (>= 3.8), python3-tk
 Installed-Size: $SIZE
 Maintainer: Miguel Sanz <123277580+MiguelSanzBr@users.noreply.github.com>
 Homepage: https://github.com/MiguelSanzBr/8bitdo-ultimate2-linux
-Description: Linux configurator for the 8BitDo Ultimate 2 Wireless controller
+Description: Linux configurator for the 8BitDo Ultimate 2 Wireless and Ultimate 2.4G
  Open-source replacement for the configuration part of 8BitDo Ultimate
  Software: button remapping, sticks, triggers, rumble, gyro, LED rings,
- profiles and backups. Provides the u2ctl command and the u2gui interface.
+ profiles and backups. Also configures the first Ultimate (2.4G) with its
+ mode switch on D. Provides the u2ctl command and the u2gui interface.
  Not affiliated with 8BitDo.
 EOF
 

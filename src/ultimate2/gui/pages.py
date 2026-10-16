@@ -2,7 +2,7 @@
 import tkinter as tk
 
 from . import i18n, theme
-from .catalog import DISPLAY, GYRO_KEYS, KEY_NAMES, LED_TARGETS, SECTIONS
+from .catalog import GYRO_KEYS, LED_TARGETS
 from .drawing import rounded
 from .geometry import HEIGHT, HOME_OFFSET, WIDTH
 from .i18n import LANGS, _
@@ -78,7 +78,7 @@ class Pages:
     def _p_home(self, parent):
         s = self.s
         page = tk.Frame(parent, bg=BG)
-        tk.Label(page, text="Ultimate 2 Wireless", bg=BG, fg=FG, font=theme.font(18)).pack(pady=(int(14 * s), 0))
+        tk.Label(page, text=self.model.name, bg=BG, fg=FG, font=theme.font(18)).pack(pady=(int(14 * s), 0))
         self.home_sub = tk.Label(page, text="", bg=BG, fg=MUTED, font=theme.font(10))
         self.home_sub.pack(pady=(int(2 * s), int(6 * s)))
         self.home_canvas = tk.Canvas(page, width=int((WIDTH + 2 * HOME_OFFSET) * s), height=int(HEIGHT * s), bg=BG,
@@ -92,7 +92,7 @@ class Pages:
         self.set_connected(False)
         tiles = tk.Frame(page, bg=BG)
         tiles.pack(pady=int(10 * s))
-        for title, key in SECTIONS:
+        for title, key in self.sections:
             t = tk.Canvas(tiles, width=int(104 * s), height=int(96 * s), bg=BG, highlightthickness=0, cursor="hand2")
             t.pack(side="left", padx=int(5 * s))
             rounded(t, 1, 1, 103 * s, 95 * s, 16 * s, fill=TILE, outline="", tags="bg")
@@ -110,8 +110,11 @@ class Pages:
         self.map_canvas = tk.Canvas(left, width=int(WIDTH * s), height=int(HEIGHT * s), bg=BG, highlightthickness=0)
         self.map_canvas.pack(pady=int(20 * s))
         self.map_items = self.draw_controller(self.map_canvas, "map")
-        tk.Label(left, text=_("Clique num botão do controle para escolher a função dele.\n"
-                            "L4/R4: botões extras do ombro · PL/PR: botões traseiros · ★: estrela/turbo."),
+        hint = (_("Clique num botão do controle para escolher a função dele.\n"
+                  "L4/R4: botões extras do ombro · PL/PR: botões traseiros · ★: estrela/turbo.") if self.model.leds else
+                _("Clique num botão do controle para escolher a função dele.\n"
+                  "P1/P2: botões traseiros · ★: estrela/turbo."))
+        tk.Label(left, text=hint,
                  bg=BG, fg=MUTED, font=theme.font(9), justify="left").pack(anchor="w")
         right = self.card(p, side="left")
         self.map_title = tk.Label(right, bg=TILE, fg=FG, font=theme.font(13, "bold"))
@@ -121,7 +124,7 @@ class Pages:
         self.map_choice = tk.StringVar()
         self.map_choice.trace_add("write", lambda *_: self.v["keys"][self.sel_btn].get() != self.map_choice.get()
                                   and self.v["keys"][self.sel_btn].set(self.map_choice.get()))
-        self.chips(right, self.map_choice, [(k, DISPLAY.get(k, k)) for k in KEY_NAMES], 4)
+        self.chips(right, self.map_choice, [(k, self.display.get(k, k)) for k in self.key_names], 4)
         self.button(right, _("Restaurar todos os botões"), self.reset_mapping).pack(anchor="w", pady=(int(10 * s), 0))
 
     def _p_sticks(self, p):
@@ -154,6 +157,8 @@ class Pages:
         c = self.card(cols, _("Motores"), side="left")
         self.slider(c, _("Motor esquerdo"), self.v["rumble_l"], 0, 5, lambda v: f"{v * 20}%")
         self.slider(c, _("Motor direito"), self.v["rumble_r"], 0, 5, lambda v: f"{v * 20}%")
+        if not self.model.leds:                           # the Ultimate 2.4G record has no trigger rumble
+            return
         c = self.card(cols, _("Vibração nos gatilhos"), side="left")
         self.toggle(c, _("Ativar"), self.v["feat"]["trigger_rumble"])
         self.slider(c, _("LT início"), self.v["xr"]["left_start"], 1, 91, pc)

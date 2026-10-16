@@ -166,13 +166,21 @@ class DeviceSync:
                 self.set_status(msg, True)
                 messagebox.showerror(_("Erro"), msg, parent=self)
                 return
-            self.set_status(_("Controle desligado ou fora de alcance. Ligue-o: ele será lido automaticamente."))
+            self.set_status(_("Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.")
+                            if "switch on its back" in msg else
+                            _("Controle desligado ou fora de alcance. Ligue-o: ele será lido automaticamente."))
             self._retry_job = self.after(theme.RETRY_MS, lambda: self.read_device(True))
 
         def job(dev):
+            if dev.model is not self.model:
+                return dev.model
             return dev.path, dev.pid, dev.info(), dev.read_config(), dev.get_theme(), dev.edition(), dev.pad_status()
 
         def done(r):
+            if isinstance(r, protocol.Model):        # another controller model: rebuild the window for it
+                self.restart = True
+                self.after_idle(self.destroy)
+                return
             path, pid, info, cfg, led_theme, edition, pad = r
             if pad:                         # through the dongle, info() is the dongle's: use the controller's own
                 edition, info = pad["edition"], pad
@@ -188,10 +196,10 @@ class DeviceSync:
             fw = f"{info['firmware'] / 100:.2f}" if info else "?"
             self.conn = (fw, pad and pad["battery"])
             self.set_connected(self.conn)
-            modes = {0: "Switch", 1: "Android", 3: "Windows (XInput)"}
+            modes = {0: "Switch", 1: "Android" if self.model.leds else "D-input", 3: "Windows (XInput)"}
             mode = modes.get(self.doc["gamepad_mode"], self.doc["gamepad_mode"])
             self.info_label.configure(text=_("Dispositivo: {}\nModo: {}\nEdição: {} ({})").format(
-                f"{path} · {protocol.PIDS.get(pid, hex(pid))}", mode, edition, _(SKINS[self.skin]["name"])))
+                f"{path} · {protocol.describe(pid, hex(pid))}", mode, edition, _(SKINS[self.skin]["name"])))
             self.load()
             self.refresh_slots()
             self.set_status(_("Configuração lida do controle. As mudanças são salvas automaticamente."))
@@ -213,15 +221,15 @@ class DeviceSync:
             return
         with open(path, "rb") as f:
             data = f.read()
-        if len(data) != protocol.CFG_SIZE:
-            return messagebox.showerror(_("Erro"), _("Arquivo inválido ({} bytes, esperado {}).").format(len(data), protocol.CFG_SIZE),
+        if len(data) != self.model.cfg_size:
+            return messagebox.showerror(_("Erro"), _("Arquivo inválido ({} bytes, esperado {}).").format(len(data), self.model.cfg_size),
                                         parent=self)
         if not messagebox.askyesno(_("Restaurar"), _("Substituir toda a configuração do controle por este backup?"), parent=self):
             return
 
         def job(dev):
             dev.write_config(data)
-            if dev.read_config() != data:
+            if not config.same(data, dev.read_config()):
                 raise IOError(_("verificação falhou"))
 
         def done(_r):

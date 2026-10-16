@@ -128,4 +128,8 @@ EN = {
     "Traseiros PL / PR": "Back buttons PL / PR",
     "Controle desligado ou fora de alcance. Ligue-o: ele será lido automaticamente.":
         "Controller off or out of range. Turn it on: it will be read automatically.",
+    "Clique num botão do controle para escolher a função dele.\nP1/P2: botões traseiros · ★: estrela/turbo.":
+        "Click a button on the controller to choose its function.\nP1/P2: back buttons · ★: star/turbo.",
+    "Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.":
+        "Ultimate 2.4G in X mode: set the switch on the back of the controller to D to configure it.",
 }

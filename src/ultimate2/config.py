@@ -1,13 +1,15 @@
-"""The 1592-byte configuration record (``custom_config_record_t_u2`` in the official app).
+"""The configuration record: 1592 bytes on the Ultimate 2 (``custom_config_record_t_u2`` in the official app),
+1652 on the Ultimate 2.4G (``Ultimate2_4Advance.custom_config_record_t`` in Ultimate Software V1).
 
 Three profile slots, MSVC natural alignment, little endian. :func:`decode` turns the bytes into a
 readable nested dict; :func:`encode` writes an edited dict back over the original bytes, touching only
-the fields that changed so everything else round-trips exactly. ``docs/PROTOCOL.md`` lists every offset.
+the fields that changed so everything else round-trips exactly. The record size tells the models apart.
+``docs/PROTOCOL.md`` lists every offset.
 """
 import math
 import struct
 
-from .protocol import CFG_SIZE, crc16
+from .protocol import U24G_CFG_SIZE, crc16, crc16_u24g
 
 FLAGS = {0x20200911: "enabled", 0x20190000: "disabled", 0: "off"}
 # physical buttons, in map_key.key[] order (app: P1 = PR, P2 = PL back paddles, P3 = L4, P4 = R4)
@@ -25,8 +27,18 @@ FEATURES = {0x1: "invert_LS_X", 0x2: "invert_LS_Y", 0x4: "invert_RS_X", 0x8: "in
             0x10: "swap_sticks", 0x80: "swap_triggers", 0x100: "swap_LS_dpad", 0x8000: "trigger_rumble"}
 CRC_FIELD = (12, 16)     # byte range of crc_value
 
+# Ultimate 2.4G: 20 buttons (P1/P2 = the back paddles) and the codes of BasicAdvanceUIData.KEY_*_MAP, with RT and
+# Home as set by its AutoR2AndHome() -> changeKey() (same as the Ultimate 2); no stick directions, but Swap
+BUTTONS_U24G = BUTTONS[:20]
+KEYCODES_U24G = {0: "None", 0x1: "Start", 0x2: "L3", 0x4: "R3", 0x8: "Select", 0x10: "X", 0x20: "Y",
+                 0x40: "Right", 0x80: "Left", 0x100: "Down", 0x200: "Up", 0x400: "LB", 0x800: "RB",
+                 0x1000: "B", 0x2000: "A", 0x4000: "LT", 0x8000: "RT", 0x10000: "Menu", 0x20000: "Home",
+                 0x400000: "Screenshot", 0x800000: "TurboSingle", 0x1000000: "TurboAuto", 0x2000000: "P1",
+                 0x4000000: "P2", 0x8000000: "Swap"}
+
 # Field kinds: B/H/I = unsigned ints, f = float, str32 = UTF-16BE name, F = flag, K = key code,
-# M = feature bitmask, X = raw hex u32, C = #rrggbb color.
+# M = feature bitmask, X = raw hex u32, C = #rrggbb color; Ultimate 2.4G: name16 = UTF-16LE name, k = key code,
+# R = the four 96-byte macro records of a slot ("erased" all 0xFF, "empty" all zero, else "custom", kept as is).
 
 
 def _from_names(table, val):
@@ -79,7 +91,48 @@ def _fields():
 FIELDS = _fields()
 
 
+def _fields_u24g():
+    """``[(path, offset, kind)]`` of the Ultimate 2.4G record (map key: flag + 20 codes; macros: flag + count, the
+    four 96-byte records are kept as they are)."""
+    f = [(("crc_value",), 12, "I"), (("gamepad_mode",), 16, "H"), (("cur_slot",), 18, "H")]
+    for s in range(3):
+        p = ("slots", s)
+        f.append((p + ("flag",), 4 * s, "F"))
+        f.append((p + ("name",), 20 + 32 * s, "name16"))
+        o = 116 + 12 * s
+        f += [(p + ("rumble", "flag"), o, "F"), (p + ("rumble", "left"), o + 4, "f"), (p + ("rumble", "right"), o + 8, "f")]
+        for sec, base in (("sticks", 152), ("triggers", 176)):
+            o = base + 8 * s
+            f += [(p + (sec, "flag"), o, "F"), (p + (sec, "left_start"), o + 4, "B"), (p + (sec, "left_end"), o + 5, "B"),
+                  (p + (sec, "right_start"), o + 6, "B"), (p + (sec, "right_end"), o + 7, "B")]
+        o = 200 + 8 * s
+        f += [(p + ("special", "flag"), o, "F"), (p + ("special", "features"), o + 4, "M")]
+        o = 224 + 84 * s
+        f.append((p + ("mapping", "flag"), o, "F"))
+        f += [(p + ("mapping", BUTTONS_U24G[i]), o + 4 + 4 * i, "k") for i in range(20)]
+        o = 476 + 392 * s
+        f += [(p + ("macros", "flag"), o, "F"), (p + ("macros", "total_cnt"), o + 4, "B"),
+              (p + ("macros", "records"), o + 8, "R")]
+    return f
+
+
+FIELDS_U24G = _fields_u24g()
+
+
+def _table(buf):
+    return FIELDS_U24G if len(buf) == U24G_CFG_SIZE else FIELDS
+
+
 def _get(buf, off, kind):
+    if kind == "R":
+        raw = buf[off:off + 384]
+        return "erased" if raw == b"\xff" * 384 else "empty" if not any(raw) else "custom"
+    if kind == "name16":  # UTF-16LE (the app's Encoding.Unicode), 0x0000-terminated; any 0xFF byte = erased
+        raw = buf[off:off + 32]
+        if b"\xff" in raw:
+            return ""
+        chars = [raw[i:i + 2] for i in range(0, 32, 2)]
+        return b"".join(chars[:chars.index(b"\0\0")] if b"\0\0" in chars else chars).decode("utf-16-le", "replace")
     if kind == "str32":   # UTF-16BE, max 16 chars, 0x0000-terminated; any 0xFF byte = erased
         raw = buf[off:off + 32]
         if b"\xff" in raw:
@@ -89,11 +142,13 @@ def _get(buf, off, kind):
     if kind == "f":
         v = struct.unpack_from("<f", buf, off)[0]
         return round(v, 4) if math.isfinite(v) else None   # erased flash (0xFFFFFFFF) is NaN
-    v = struct.unpack_from("<" + ("I" if kind in "XCFKM" else kind), buf, off)[0]
+    v = struct.unpack_from("<" + ("I" if kind in "XCFKMk" else kind), buf, off)[0]
     if kind == "F":
         return FLAGS.get(v, f"0x{v:08x}")
     if kind == "K":
         return KEYCODES.get(v, f"0x{v:08x}")
+    if kind == "k":
+        return KEYCODES_U24G.get(v, f"0x{v:08x}")
     if kind == "M":
         if v == 0xFFFFFFFF:
             return "0xffffffff"
@@ -106,13 +161,19 @@ def _get(buf, off, kind):
 def _put(buf, off, kind, val):
     if kind == "str32":
         buf[off:off + 32] = val[:16].encode("utf-16-be").ljust(32, b"\0")
+    elif kind == "name16":
+        buf[off:off + 32] = val[:16].encode("utf-16-le").ljust(32, b"\0")
+    elif kind == "R":                      # only the app's clearMacro (all zero) and erased flash can be written
+        buf[off:off + 384] = {"empty": b"\0", "erased": b"\xff"}[val] * 384
     elif kind == "f":
         struct.pack_into("<f", buf, off, float("nan") if val is None else float(val))
-    elif kind in "XCFKM":
+    elif kind in "XCFKMk":
         if kind == "F":
             v = _from_names(FLAGS, val)
         elif kind == "K":
             v = _from_names(KEYCODES, val)
+        elif kind == "k":
+            v = _from_names(KEYCODES_U24G, val)
         elif kind == "M":
             v = int(val, 16) if isinstance(val, str) else sum(_from_names(FEATURES, x) for x in val)
         else:
@@ -125,14 +186,24 @@ def _put(buf, off, kind, val):
 def changed_span(old, new):
     """``(start, end)`` of the bytes that differ, ignoring ``crc_value`` (the app's partial writes never
     refresh it, so the firmware does not check it); ``None`` if nothing changed."""
-    diff = [i for i in range(CFG_SIZE) if old[i] != new[i] and not CRC_FIELD[0] <= i < CRC_FIELD[1]]
+    diff = [i for i in range(len(old)) if old[i] != new[i] and not CRC_FIELD[0] <= i < CRC_FIELD[1]]
     return (diff[0], diff[-1] + 1) if diff else None
 
 
+def same(written, read):
+    """Did the controller keep ``written``? The Ultimate 2.4G firmware stores its own ``crc_value`` when it saves
+    (1 after the first save), so that field is not compared there."""
+    if len(written) == U24G_CFG_SIZE == len(read):
+        a, b = CRC_FIELD
+        return written[:a] + written[b:] == read[:a] + read[b:]
+    return written == read
+
+
 def decode(buf):
-    """Record bytes -> nested dict (``slots`` is a list of 3 profiles)."""
-    out = {}
-    for path, off, kind in FIELDS:
+    """Record bytes -> nested dict (``slots`` is a list of 3 profiles). An Ultimate 2.4G record also gets
+    ``"model": "u24g"``."""
+    out = {"model": "u24g"} if len(buf) == U24G_CFG_SIZE else {}
+    for path, off, kind in _table(buf):
         node = out
         for k in path[:-1]:
             node = node.setdefault(k, {})
@@ -157,12 +228,13 @@ def encode(doc, base):
     """Write ``doc`` over the record ``base``; returns ``(new_bytes, changed_paths)``.
 
     Only fields that differ from ``decode(base)`` are written, so untouched bytes round-trip exactly;
-    missing fields are skipped. ``crc_value`` is recomputed like the app's ``ANSI_CRC_16_Ultimate2``.
+    missing fields are skipped. ``crc_value`` is recomputed like the app's ``ANSI_CRC_16_Ultimate2`` (or
+    ``ANSI_CRC_16_Ultimate2_4``, over the record as it stands, before the new value is stored).
     """
     buf = bytearray(base)
     cur = decode(base)
     changed = []
-    for path, off, kind in FIELDS:
+    for path, off, kind in _table(base):
         if path == ("crc_value",):
             continue
         try:
@@ -172,12 +244,15 @@ def encode(doc, base):
         if new != _lookup(cur, path):
             _put(buf, off, kind, new)
             changed.append("/".join(map(str, path)))
-    struct.pack_into("<I", buf, CRC_FIELD[0], crc16(buf))
+    crc = crc16_u24g if len(base) == U24G_CFG_SIZE else crc16
+    struct.pack_into("<I", buf, CRC_FIELD[0], crc(buf))
     return bytes(buf), changed
 
 
 def default_slot(doc, n, name):
     """Fill slot ``n`` of ``doc`` with the defaults the Windows app uses for a new profile."""
+    if doc.get("model") == "u24g":
+        return _default_slot_u24g(doc, n, name)
     mode = doc["gamepad_mode"]
     s = doc["slots"][n]
     ident = ["B", "A", "Y", "X"] if mode == 0 else ["A", "B", "X", "Y"]
@@ -200,4 +275,22 @@ def default_slot(doc, n, name):
     s["macros"] = dict(s.get("macros", {}), flag=on, total_cnt=0)
     s["macros"]["records"] = [dict(name="", gamepad_mode=mode, special_flag=0, max_steps=0, offset=0,
                                    key_map="0x00000000", cycles_num=0, interval_ms=0) for _ in range(4)]
+    return doc
+
+
+
+def _default_slot_u24g(doc, n, name):
+    """Ultimate Software V1 (Ultimate2_4AdvanceUI): a section read with its flag off is reset by ``clearMapping``,
+    ``clearRumble``, ``clearSticks``, ``clearTriger``, ``clearMacro``, ``clearfeature``; saving then enables the slot
+    and every section (``enableFlagWithrecord``)."""
+    keys = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "L3", "R3", "Select", "Start",
+            "Screenshot" if doc["gamepad_mode"] == 0 else "Menu", "Home", "Up", "Down", "Left", "Right", "None", "None"]
+    on = "enabled"
+    doc["slots"][n] = dict(doc["slots"][n], flag=on, name=name,
+        rumble=dict(flag=on, left=1.0, right=1.0),
+        sticks=dict(flag=on, left_start=0, left_end=128, right_start=0, right_end=128),
+        triggers=dict(flag=on, left_start=0, left_end=255, right_start=0, right_end=255),
+        special=dict(flag=on, features=[]),
+        mapping=dict(flag=on, **dict(zip(BUTTONS_U24G, keys))),
+        macros=dict(flag=on, total_cnt=0, records="empty"))
     return doc

@@ -2,6 +2,14 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.1.0-beta.6+u24g1 — 2026-10-16
+
+* Support for the **8BitDo Ultimate 2.4G** (the first Ultimate), with its mode switch on D (`2dc8:3012`; the dongle
+  `2dc8:3013` is untested): profiles, buttons with the P1/P2 back buttons, sticks, triggers, rumble and backups in
+  `u2ctl` and `u2gui`. Its protocol, from *Ultimate Software V1*, is in `docs/PROTOCOL.md`. `u2gui` hides the gyro and
+  LED pages for it, and both tools say when the controller is on X (`2dc8:3106`), where it cannot be configured.
+* `tools/probe_u24g.py`: read-only check of an Ultimate 2.4G (version and the whole record, saved to a file).
+
 ## 0.1.0-beta.6 — 2026-10-15
 
 * Flatpak: AppStream metadata, desktop entry and icon under the app ID `io.github.miguelsanzbr._8bitdo-ultimate2-linux` (`packaging/flatpak/`), ready for a

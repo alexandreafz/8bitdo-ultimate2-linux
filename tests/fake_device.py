@@ -1,4 +1,4 @@
-"""In-process emulator of the Ultimate 2 firmware's config channel, for tests.
+"""In-process emulator of the Ultimate 2 (or, with ``usb_pid=0x3012``, the Ultimate 2.4G) firmware's config channel.
 
 The fake hidraw node is one end of a SOCK_SEQPACKET socketpair (keeps 64-byte report boundaries and
 works with select/os.read/os.write); a thread answers on the other end like the real controller.
@@ -10,7 +10,8 @@ from ultimate2 import discovery, protocol as u
 
 class FakeController:
     def __init__(self, cfg=None, firmware=110, beta=0, report_pid=0x6012, usb_pid=0x310B):
-        self.cfg = bytearray(cfg if cfg is not None else b"\xff" * u.CFG_SIZE)
+        self.u24g = usb_pid in u.U24G_PIDS
+        self.cfg = bytearray(cfg if cfg is not None else b"\xff" * (u.U24G_CFG_SIZE if self.u24g else u.CFG_SIZE))
         self.pending = bytearray(self.cfg)
         self.firmware, self.beta, self.report_pid, self.usb_pid = firmware, beta, report_pid, usb_pid
         self.path, self.js_path = "/dev/hidraw-fake", "/dev/input/js-fake"
@@ -21,6 +22,7 @@ class FakeController:
         self.theme = 2
         self.edition = 3
         self.pad = None            # through the dongle: {"battery", "firmware", "edition"} of the controller
+        self.saves = 0             # Ultimate 2.4G: its firmware stores a save counter in crc_value
         self.host, self._dev = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         self._t = threading.Thread(target=self._serve, daemon=True)
         self._t.start()
@@ -59,6 +61,9 @@ class FakeController:
                 return
             if not pkt:
                 return
+            if self.u24g:
+                self._serve_u24g(pkt)
+                continue
             if pkt[:5] == b"\x81\x05\x00\x21\x01":       # version / colorway query
                 self._dev.send(bytes([0x02, 0x22, self.firmware & 0xFF, self.firmware >> 8, self.beta, 0,
                                       self.edition]).ljust(64, b"\0"))
@@ -100,3 +105,33 @@ class FakeController:
                 self._reply(cmd)
             elif cmd == u.CMD_GET_THEME:
                 self._reply(cmd, bytes([self.theme]))
+
+    def _serve_u24g(self, pkt):
+        """Ultimate 2.4G: ``81 n 04 | u16 cmd | u16 sub | u32 len | u32 total | u32 offset | data``; answers
+        ``02 04 | u16 4 | u16 cmd | u32 len | u32 total | u32 offset | data``; only read, write and commit 0x15."""
+        if pkt[:5] == b"\x81\x05\x00\x21\x01":           # version: firmware, beta, 0, PID
+            self._dev.send(struct.pack("<BBHBBH", 0x02, 0x22, self.firmware, self.beta, 0, self.usb_pid).ljust(64, b"\0"))
+            return
+        if pkt[0] != 0x81 or pkt[2] != 4:
+            return
+        cmd, sub, length, total, off = struct.unpack_from("<HHIII", pkt, 3)
+        self.log.append((cmd, sub, length, off))
+        if self.drop:
+            self.drop -= 1
+            return
+        if cmd in self.silent:
+            return
+        reply = lambda data=b"", n=None: self._dev.send((b"\x02\x04" + struct.pack(
+            "<HHIII", 4, cmd, len(data) if n is None else n, total, off) + data).ljust(64, b"\0"))
+        if cmd == u.CMD_READ:
+            reply(bytes(self.cfg[off:off + length]))
+        elif cmd == u.CMD_WRITE:
+            self.pending[off:off + length] = pkt[19:19 + length]
+            reply(n=length)
+        elif cmd == u.CMD_COMMIT and sub == u.U24G_COMMIT_KEY:
+            self.saves += 1
+            self.cfg[:] = self.pending
+            struct.pack_into("<I", self.cfg, 12, self.saves)
+            if self.corrupt_commit:
+                self.cfg[100] ^= 0xFF
+            reply()
