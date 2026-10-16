@@ -61,12 +61,31 @@ def test_empty_profile_then_autosave_writes_the_whole_record(ua, u24):
     pump(ua, lambda: ua._save_job is None and not ua.busy, timeout=10)
     writes = [e for e in u24.log if e[0] == protocol.CMD_WRITE]
     assert sum(e[2] for e in writes) == SIZE and u24.saves == 1
+    assert ua.status.cget("text").startswith("✓ Salvo")                  # the save counter is not a mismatch
+    assert ua.base == bytes(u24.cfg)                                      # base follows the controller
     s = config.decode(bytes(u24.cfg))["slots"][0]
     assert s["flag"] == "enabled" and s["mapping"]["A"] == "B" and s["mapping"]["P1"] == "None"
     assert struct.unpack_from("<I", bytes(u24.cfg), 12)[0] == 1           # the firmware's own crc_value
     ua.v["rumble_l"].set(2)
     pump(ua, lambda: ua._save_job is None and not ua.busy, timeout=10)
     assert config.decode(bytes(u24.cfg))["slots"][0]["rumble"]["left"] == pytest.approx(.4) and u24.saves == 2
+    assert ua.status.cget("text").startswith("✓ Salvo")
+
+
+def test_creating_profile_3_saves_without_a_verify_error(ua, u24, dlg):
+    ua.select_slot(2)
+    ua.v["rumble_r"].set(4)
+    pump(ua, lambda: ua._save_job is None and not ua.busy, timeout=10)
+    s = config.decode(bytes(u24.cfg))["slots"][2]
+    assert s["flag"] == "enabled" and s["name"] == "Perfil 3" and s["rumble"]["right"] == pytest.approx(.8)
+    assert ua.status.cget("text").startswith("✓ Salvo") and not dlg.errors
+
+
+def test_save_that_does_not_stick_is_reported(ua, u24, dlg):
+    u24.corrupt_commit = True
+    ua.v["keys"]["B"].set("X")
+    pump(ua, lambda: ua._save_job is None and not ua.busy, timeout=10)
+    assert "verificação falhou" in ua.status.cget("text") and dlg.errors
 
 
 def test_load_existing_profile(u24, monkeypatch, fast):

@@ -106,11 +106,17 @@ class DeviceSync:
 
         def job(dev):
             dev.write_config(new, *span)
-            if dev.read_config()[span[0]:span[1]] != new[span[0]:span[1]]:
+            got = dev.read_config()
+            if self.model is protocol.U24G:      # whole record, minus the fields its firmware owns
+                if not config.same(new, got):
+                    raise IOError(_("verificação falhou: o controle não guardou o que foi enviado"))
+                return got
+            if got[span[0]:span[1]] != new[span[0]:span[1]]:
                 raise IOError(_("verificação falhou: o controle não guardou o que foi enviado"))
+            return new
 
-        def done(_r):
-            self.base = new
+        def done(saved):
+            self.base = saved
             self.profile_note.configure(text="")
             self.set_status(_("✓ Salvo no controle ({} bytes).").format(span[1] - span[0]))
         self.run(_("Salvando no controle…"), job, done)

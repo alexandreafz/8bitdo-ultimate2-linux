@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ultimate2"
-version = "0.1.0b6+u24g2"
+version = "0.1.0b6+u24g3"
 description = "Open-source Linux configurator for the 8BitDo Ultimate 2 Wireless and Ultimate 2.4G controllers (CLI + GUI)"
 readme = "README.md"
 license = { text = "MIT" }

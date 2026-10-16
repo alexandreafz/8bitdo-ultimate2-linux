@@ -24,3 +24,6 @@ GUI tests need an X display. On a headless machine, run them through `xvfb-run`.
 * Protocol knowledge goes into `docs/PROTOCOL.md` together with the code.
 * Before writing to a real controller, back it up first with `u2ctl backup file.bin`.
 * Commit messages: imperative mood, short subject line.
+
+Run the GUI tests on a virtual display without GLX, so Xvfb never opens the GPU driver:
+`xvfb-run -a -s "-extension GLX -screen 0 1280x1024x24" python -m pytest`.
