@@ -4,7 +4,7 @@ import threading
 import time
 from tkinter import filedialog, messagebox
 
-from .. import battery, config, device, protocol, xmode
+from .. import battery, config, device, discovery, protocol, xmode
 from . import theme
 from .i18n import _
 from .theme import ACCENT, DANGER, DEFAULT_SKIN, EDITION_SKINS, MUTED, SKINS, THEME_NAMES
@@ -123,8 +123,19 @@ class DeviceSync:
         self.run(_("Salvando no controle…"), job, done)
 
     # ------------------------------------------------------------ live state
+    def check_conflict(self):
+        """Warn when the X configuration (receiver, or cable on X) is being edited while the pad plays on Bluetooth,
+        which uses the D one: the changes would not apply where the user is testing them."""
+        on = bool(self.doc and self.doc.get("gamepad_mode") == 3 and discovery.bluetooth_u24g())
+        if on and not self.conflict.winfo_manager():
+            self.conflict.pack(fill="x", padx=int(24 * self.s), pady=(int(10 * self.s), 0), after=self.slot_btns[0].master)
+        elif not on and self.conflict.winfo_manager():
+            self.conflict.pack_forget()
+        return on
+
     def poll(self):
         """Follow the controller's active profile (the user switches it with the profile button)."""
+        self.check_conflict()
         if self.doc is not None and not self.busy and self._save_job is None:
             wireless = bool(self.conn and self.conn[1] is not None)    # battery only exists through the dongle
 
@@ -222,6 +233,7 @@ class DeviceSync:
             self.load()
             self.refresh_slots()
             self.set_status(_("Configuração lida do controle. As mudanças são salvas automaticamente."))
+            self.check_conflict()
         self.run("" if retry else _("Lendo do controle…"), job, done, quiet=retry, fail=fail)
 
     # ------------------------------------------------------------ Ultimate 2.4G on X

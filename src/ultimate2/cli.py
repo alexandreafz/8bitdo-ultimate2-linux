@@ -9,6 +9,10 @@ from . import protocol
 from .protocol import THEMES, VID, describe
 
 
+BT_CONFLICT = ("warning: the controller is also connected over Bluetooth, which uses the D-mode configuration: "
+               "changes made here (X mode) do not apply there")
+
+
 def parser():
     ap = argparse.ArgumentParser(prog="u2ctl", description="Configure the 8BitDo Ultimate 2 Wireless and the Ultimate 2.4G "
                                                           "(mode switch on D) on Linux.")
@@ -73,6 +77,8 @@ def main(argv=None):
         if not ok:
             sys.exit("no Ultimate 2.4G on X found, or it did not open its config mode")
         print("config mode open (X configuration); `u2ctl xmode leave` goes back to X")
+        if discovery.bluetooth_u24g():
+            print(BT_CONFLICT)
         return
 
     dev = device.Device(a.device)
@@ -84,6 +90,8 @@ def main(argv=None):
         print(f"firmware    {i['firmware'] / 100:.2f}" + (f" beta {i['beta']}" if i["beta"] else ""))
         print(f"report pid  0x{i['device_pid']:04x} ({describe(i['device_pid'])})")
         print(f"mode/slot   gamepad_mode={mode} cur_slot={slot}")
+        if dev.model is protocol.U24G and mode == 3 and discovery.bluetooth_u24g():
+            print(BT_CONFLICT)
         pad = dev.pad_status()
         if pad:                                    # 2.4G: the controller behind the dongle
             print(f"controller  firmware {pad['firmware'] / 100:.2f}, battery {pad['battery']}%, colorway {pad['edition']}")

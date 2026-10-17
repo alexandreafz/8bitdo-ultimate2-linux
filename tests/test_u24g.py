@@ -580,3 +580,24 @@ def test_cli_battery(monkeypatch, capsys):
     assert "battery" not in capsys.readouterr().out
     with pytest.raises(SystemExit, match="only known over Bluetooth"):
         run("battery")
+
+
+def test_cli_warns_about_bluetooth_with_the_x_configuration(monkeypatch, capsys):
+    doc = config.decode(BLANK)
+    doc["gamepad_mode"] = 3
+    x_cfg = config.encode(doc, BLANK)[0]
+    f = FakeController(cfg=x_cfg, firmware=110, usb_pid=0x3013).install(monkeypatch)
+    try:
+        monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)
+        run("info")
+        assert "also connected over Bluetooth" in capsys.readouterr().out
+        monkeypatch.setattr(xmode, "enter", lambda: True)
+        run("xmode", "enter")
+        assert "also connected over Bluetooth" in capsys.readouterr().out
+        monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: False)
+        run("info")
+        run("xmode", "enter")
+        assert "Bluetooth" not in capsys.readouterr().out
+    finally:
+        f.close()
+

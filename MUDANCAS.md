@@ -1,7 +1,7 @@
 # O que mudou em relação ao original
 
 Comparação entre o original **8bitdo-ultimate2-linux 0.1.0-beta.6** (commit `7257f07`, guardado sem alterações) e o
-estado atual (`0.1.0b6+u24g8`). Para ver as linhas exatas: `git diff 7257f07 HEAD -- <arquivo>`.
+estado atual (`0.1.0b6+u24g9`). Para ver as linhas exatas: `git diff 7257f07 HEAD -- <arquivo>`.
 
 **Resumo:** 36 arquivos, 27 modificados e 9 novos, +2.048 / −114 linhas; nenhum arquivo removido. Todas as mudanças
 acrescentam suporte ao **8BitDo Ultimate 2.4G**; o comportamento com o Ultimate 2 Wireless continua o mesmo.

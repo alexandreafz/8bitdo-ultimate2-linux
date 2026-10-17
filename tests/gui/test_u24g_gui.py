@@ -276,3 +276,31 @@ def test_battery_shown_while_configuring_another_way(ua, u24, monkeypatch, fast)
     pump(ua)
     assert ua.conn == ("2.04", 63)                      # Bluetooth gone: last known value kept until the next read
 
+
+def test_warns_when_editing_x_while_the_pad_is_on_bluetooth(u24, monkeypatch, fast):
+    doc = config.decode(BLANK)
+    doc["gamepad_mode"] = 3                                            # the X configuration (receiver)
+    u24.cfg[:] = u24.pending[:] = config.encode(doc, BLANK)[0]
+    bt = [True]
+    monkeypatch.setattr(app_mod.discovery, "connected_model", lambda: protocol.U24G)
+    monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: bt[0])
+    a = new_app(monkeypatch)
+    try:
+        a.read_device()
+        pump(a)
+        assert a.conflict.winfo_manager() == "pack"
+        bt[0] = False                                                  # Bluetooth gone: the warning goes away
+        a.poll()
+        pump(a)
+        assert a.conflict.winfo_manager() == ""
+        a.check_conflict()
+        assert a.conflict.winfo_manager() == ""
+    finally:
+        clear_timers(a)
+        a.destroy()
+
+
+def test_no_warning_for_the_d_configuration(ua, monkeypatch):
+    monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)    # D configuration (cable): what Bluetooth uses
+    assert ua.check_conflict() is False and ua.conflict.winfo_manager() == ""
+

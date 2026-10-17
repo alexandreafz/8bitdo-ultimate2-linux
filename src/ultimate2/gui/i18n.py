@@ -131,6 +131,8 @@ EN = {
     "Clique num botão do controle para escolher a função dele.\nP1/P2: botões traseiros · ★: estrela/turbo.":
         "Click a button on the controller to choose its function.\nP1/P2: back buttons · ★: star/turbo.",
     "Copiar": "Copy",
+    "Atenção: o controle está conectado pelo Bluetooth, mas você está editando a configuração do modo X (receptor). O Bluetooth usa a configuração do modo D, então estas mudanças NÃO valem nele. Para editar o que vale no Bluetooth, desconecte o receptor e ligue o cabo USB com a chave em D.":
+        "Warning: the controller is connected over Bluetooth, but you are editing the X-mode configuration (receiver). Bluetooth uses the D-mode configuration, so these changes do NOT apply there. To edit what applies over Bluetooth, unplug the receiver and plug in the USB cable with the switch on D.",
     "Bateria: {}%.": "Battery: {}%.",
     "Abrindo a configuração do modo X…": "Opening the X-mode configuration…",
     "Sem permissão para abrir o modo X: reinstale o pacote (regra udev) e reconecte o controle. Ou coloque a chave em D.":
