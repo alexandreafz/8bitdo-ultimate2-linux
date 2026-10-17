@@ -157,7 +157,7 @@ def test_bluetooth_status(monkeypatch, fast):
         assert a.model is protocol.U24G
         a.read_device()
         pump(a)
-        assert "Bluetooth" in a.status.cget("text") and "cabo USB" in a.status.cget("text") and a._retry_job
+        assert "Bluetooth" in a.status.cget("text") and "cabo USB" in a.btinfo_text.cget("text") and a._retry_job
     finally:
         clear_timers(a)
         a.destroy()
@@ -248,7 +248,7 @@ def test_bluetooth_status_shows_the_battery(monkeypatch, fast):
     try:
         a.read_device()
         pump(a)
-        assert "Bateria: 91%." in a.status.cget("text")
+        assert "Bateria: 91%." in a.btinfo_text.cget("text") and a.btinfo.winfo_manager() == "pack"
         assert "91%" in [a.pill.itemcget(i, "text") for i in a.pill.find_withtag("battery")]
         assert a.fw_label.cget("text") == ""                      # no firmware known over Bluetooth
     finally:
@@ -303,4 +303,69 @@ def test_warns_when_editing_x_while_the_pad_is_on_bluetooth(u24, monkeypatch, fa
 def test_no_warning_for_the_d_configuration(ua, monkeypatch):
     monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)    # D configuration (cable): what Bluetooth uses
     assert ua.check_conflict() is False and ua.conflict.winfo_manager() == ""
+
+
+def test_bluetooth_shows_the_copy_from_the_last_cable_read(u24, monkeypatch, fast, tmp_path):
+    from ultimate2 import battery
+    from ultimate2.gui import sync
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    doc = config.default_slot(config.decode(BLANK), 1, "Corrida")
+    doc["slots"][1]["special"]["features"] = ["swap_LS_dpad"]
+    u24.cfg[:] = u24.pending[:] = config.encode(doc, BLANK)[0]
+    a = new_app(monkeypatch)                                   # 1) over the cable (D): the copy is kept
+    try:
+        a.read_device()
+        pump(a)
+        assert open(sync.cache_path(), "rb").read() == bytes(u24.cfg) and not a.readonly
+        clear_timers(a)
+    finally:
+        a.destroy()
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))          # 2) only on Bluetooth
+    monkeypatch.setattr(discovery, "xinput_u24g", lambda: False)
+    monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)
+    monkeypatch.setattr(battery, "bluetooth", lambda: {"capacity": 77, "status": "Discharging", "name": "8BitDo"})
+    a = new_app(monkeypatch)
+    try:
+        a.read_device()
+        pump(a)
+        assert a.readonly and a.doc["slots"][1]["name"] == "Corrida" and a.active_slot is None
+        text = a.btinfo_text.cget("text")
+        assert "somente leitura" in text and "Bateria: 77%." in text and "/" in text   # the copy's date
+        a.select_slot(1, gather=False)
+        assert a.v["feat"]["swap_LS_dpad"].get() is True
+        a.v["feat"]["swap_LS_dpad"].set(False)                # nothing is written: the shown value comes back
+        pump(a, lambda: a.v["feat"]["swap_LS_dpad"].get() is True)
+        assert a._save_job is None and "Somente leitura" in a.status.cget("text")
+        a.read_device()                                        # still on Bluetooth: the copy is not reloaded
+        pump(a)
+        assert a.slot == 1
+        monkeypatch.setattr(battery, "bluetooth", lambda: None)
+        a.poll()                                               # read-only poll: just the badge
+        assert a.readonly
+    finally:
+        clear_timers(a)
+        a.destroy()
+
+
+def test_bluetooth_without_a_copy_says_to_plug_the_cable_once(monkeypatch, fast, tmp_path):
+    from ultimate2 import battery
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "empty"))
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))
+    monkeypatch.setattr(discovery, "xinput_u24g", lambda: False)
+    monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)
+    monkeypatch.setattr(battery, "bluetooth", lambda: None)
+    a = new_app(monkeypatch)
+    try:
+        a.read_device()
+        pump(a)
+        assert not a.readonly and "uma vez para o programa guardar" in a.btinfo_text.cget("text")
+    finally:
+        clear_timers(a)
+        a.destroy()
+
+
+def test_keeping_the_copy_is_only_a_convenience(ua, monkeypatch, tmp_path):
+    (tmp_path / "ultimate2").write_text("a file where the folder should be")
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    ua.keep_copy(b"x")                                         # no error
 

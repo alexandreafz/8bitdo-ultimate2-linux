@@ -131,14 +131,21 @@ EN = {
     "Clique num botão do controle para escolher a função dele.\nP1/P2: botões traseiros · ★: estrela/turbo.":
         "Click a button on the controller to choose its function.\nP1/P2: back buttons · ★: star/turbo.",
     "Copiar": "Copy",
+    "Somente leitura no Bluetooth: ligue o cabo USB (chave em D) para mudar.":
+        "Read-only over Bluetooth: plug in the USB cable (switch on D) to change it.",
+    "Controle conectado pelo Bluetooth, que não permite ler nem gravar a configuração.":
+        "Controller connected over Bluetooth, which cannot read or write its configuration.",
+    "Mostrando a última configuração lida pelo cabo, em {} (somente leitura); é a que vale no Bluetooth. Para mudar, ligue o cabo USB com a chave em D.":
+        "Showing the last configuration read over the cable, on {} (read-only); it is the one Bluetooth uses. To change it, plug in the USB cable with the switch on D.",
+    "Ligue o cabo USB (chave em D) uma vez para o programa guardar e mostrar a configuração.":
+        "Plug in the USB cable (switch on D) once so the program keeps and shows the configuration.",
+    "Bluetooth: somente leitura.": "Bluetooth: read-only.",
     "Atenção: o controle está conectado pelo Bluetooth, mas você está editando a configuração do modo X (receptor). O Bluetooth usa a configuração do modo D, então estas mudanças NÃO valem nele. Para editar o que vale no Bluetooth, desconecte o receptor e ligue o cabo USB com a chave em D.":
         "Warning: the controller is connected over Bluetooth, but you are editing the X-mode configuration (receiver). Bluetooth uses the D-mode configuration, so these changes do NOT apply there. To edit what applies over Bluetooth, unplug the receiver and plug in the USB cable with the switch on D.",
     "Bateria: {}%.": "Battery: {}%.",
     "Abrindo a configuração do modo X…": "Opening the X-mode configuration…",
     "Sem permissão para abrir o modo X: reinstale o pacote (regra udev) e reconecte o controle. Ou coloque a chave em D.":
         "No permission to open X mode: reinstall the package (udev rule) and replug the controller. Or set the switch to D.",
-    "Ultimate 2.4G conectado por Bluetooth, que não permite configurar: ligue o cabo USB (chave em D). Os perfis gravados valem também no Bluetooth.":
-        "Ultimate 2.4G connected over Bluetooth, which cannot be configured: plug in the USB cable (switch on D). The saved profiles also apply over Bluetooth.",
     "Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.":
         "Ultimate 2.4G in X mode: set the switch on the back of the controller to D to configure it.",
 }

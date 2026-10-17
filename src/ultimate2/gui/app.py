@@ -78,6 +78,7 @@ class App(Pages, ControllerView, Editor, DeviceSync, PadInput, tk.Tk):
         self._remapped = set()
         self._closing = False
         self.conn = None         # connection badge state of the last successful read
+        self.readonly = False    # Ultimate 2.4G on Bluetooth: showing the copy kept from the last cable read
         self.xmode_tried = False # Ultimate 2.4G on X: tried to open its X configuration once
         self.xmode_open = False  # ... and opened it: put it back on X when the window closes
         self._style()
@@ -162,6 +163,11 @@ class App(Pages, ControllerView, Editor, DeviceSync, PadInput, tk.Tk):
                                     wraplength=int(760 * s))
         self.banner_text.pack(side="left", fill="x", expand=True)
         self.banner_btn = self.button(banner_in, _("Editar o perfil ativo"), lambda: self.select_slot(self.active_slot))
+        # Ultimate 2.4G on Bluetooth only: no config channel; shows the copy kept from the last cable read
+        self.btinfo, btinfo_in = panel(self, s, fill="#2b2618", pady=10)
+        self.btinfo_text = tk.Label(btinfo_in, bg="#2b2618", fg=WARN, font=theme.font(9), anchor="w", justify="left",
+                                    wraplength=int(900 * s))
+        self.btinfo_text.pack(side="left", fill="x", expand=True)
         # Ultimate 2.4G: editing the X configuration (receiver) while the pad plays on Bluetooth (D configuration)
         self.conflict, conflict_in = panel(self, s, fill="#3a1d1d", pady=10)
         tk.Label(conflict_in, text=_("Atenção: o controle está conectado pelo Bluetooth, mas você está editando a configuração do modo X "

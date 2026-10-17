@@ -1,5 +1,6 @@
 """Mixin: device I/O on a worker thread — initial read, auto-save, active-profile polling, LED theme, backups."""
 import copy
+import os
 import threading
 import time
 from tkinter import filedialog, messagebox
@@ -9,6 +10,12 @@ from . import theme
 from .i18n import _
 from .theme import ACCENT, DANGER, DEFAULT_SKIN, EDITION_SKINS, MUTED, SKINS, THEME_NAMES
 from .widgets import error_dialog
+
+
+def cache_path():
+    """Copy of the Ultimate 2.4G's D configuration (the one Bluetooth uses), kept from the last cable read."""
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return os.path.join(base, "ultimate2", "u24g-modo-d.bin")
 
 
 class DeviceSync:
@@ -85,6 +92,10 @@ class DeviceSync:
         """A setting changed: an empty profile becomes a custom one, then save shortly (debounced)."""
         if self._loading or self.doc is None:
             return
+        if self.readonly:                          # Bluetooth: nothing can be written, put the shown values back
+            self.after_idle(self.load)
+            self.set_status(_("Somente leitura no Bluetooth: ligue o cabo USB (chave em D) para mudar."), True)
+            return
         if var is not self.v["enabled"] and not self.v["enabled"].get():
             self.v["enabled"].set(True)       # re-enters changed(); the second call just reschedules
         if self._save_job:
@@ -136,6 +147,11 @@ class DeviceSync:
     def poll(self):
         """Follow the controller's active profile (the user switches it with the profile button)."""
         self.check_conflict()
+        if self.readonly:                          # Bluetooth only: no config channel, keep the battery current
+            bt = battery.bluetooth()
+            self.set_connected((None, bt["capacity"]) if bt else None)
+            self.after(theme.POLL_MS, self.poll)
+            return
         if self.doc is not None and not self.busy and self._save_job is None:
             wireless = bool(self.conn and self.conn[1] is not None)    # battery only exists through the dongle
 
@@ -188,16 +204,12 @@ class DeviceSync:
             if "X mode" in msg and not self.xmode_tried:
                 self.xmode_tried = True
                 return self.enter_xmode()
-            bt = battery.bluetooth() if "Bluetooth" in msg else None
-            if bt:                                       # the badge shows the battery even without a config channel
-                self.set_connected((None, bt["capacity"]))
-            self.set_status(_("Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.")
-                            if "X mode" in msg else
-                            _("Ultimate 2.4G conectado por Bluetooth, que não permite configurar: ligue o cabo USB "
-                              "(chave em D). Os perfis gravados valem também no Bluetooth.")
-                            + (" " + _("Bateria: {}%.").format(bt["capacity"]) if bt else "")
-                            if "Bluetooth" in msg else
-                            _("Controle desligado ou fora de alcance. Ligue-o: ele será lido automaticamente."))
+            if "Bluetooth" in msg:
+                self.show_bluetooth()
+            else:
+                self.set_status(_("Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.")
+                                if "X mode" in msg else
+                                _("Controle desligado ou fora de alcance. Ligue-o: ele será lido automaticamente."))
             self._retry_job = self.after(theme.RETRY_MS, lambda: self.read_device(True))
 
         def job(dev):
@@ -234,7 +246,50 @@ class DeviceSync:
             self.refresh_slots()
             self.set_status(_("Configuração lida do controle. As mudanças são salvas automaticamente."))
             self.check_conflict()
+            self.readonly = False
+            self.btinfo.pack_forget()
+            if self.model is protocol.U24G and self.doc["gamepad_mode"] == 1:
+                self.keep_copy(cfg)
         self.run("" if retry else _("Lendo do controle…"), job, done, quiet=retry, fail=fail)
+
+    # ------------------------------------------------------------ Ultimate 2.4G on Bluetooth
+    def keep_copy(self, cfg):
+        """Keep the D configuration read over the cable: shown read-only when the pad is only on Bluetooth."""
+        try:
+            os.makedirs(os.path.dirname(cache_path()), exist_ok=True)
+            with open(cache_path(), "wb") as f:
+                f.write(cfg)
+        except OSError:
+            pass                               # only a convenience
+
+    def show_bluetooth(self):
+        """Pad only on Bluetooth (no config channel): a banner up top, the battery in the badge and, when there is
+        one, the copy kept from the last cable read, read-only (it is the configuration Bluetooth uses)."""
+        bt = battery.bluetooth()
+        self.set_connected((None, bt["capacity"]) if bt else None)
+        if not self.readonly:
+            try:
+                with open(cache_path(), "rb") as f:
+                    data = f.read()
+                when = time.strftime("%d/%m/%Y %H:%M", time.localtime(os.path.getmtime(cache_path())))
+            except OSError:
+                data = None
+            if data is not None and len(data) == protocol.U24G_CFG_SIZE:
+                self.base, self.doc, self.readonly, self.active_slot = data, config.decode(data), True, None
+                self.cache_when = when
+                self.load()
+                self.refresh_slots()
+        text = _("Controle conectado pelo Bluetooth, que não permite ler nem gravar a configuração.") + " "
+        text += (_("Mostrando a última configuração lida pelo cabo, em {} (somente leitura); é a que vale no "
+                   "Bluetooth. Para mudar, ligue o cabo USB com a chave em D.").format(self.cache_when)
+                 if self.readonly else
+                 _("Ligue o cabo USB (chave em D) uma vez para o programa guardar e mostrar a configuração."))
+        if bt:
+            text += " " + _("Bateria: {}%.").format(bt["capacity"])
+        self.btinfo_text.configure(text=text)
+        if not self.btinfo.winfo_manager():
+            self.btinfo.pack(fill="x", padx=int(24 * self.s), pady=(int(10 * self.s), 0), after=self.slot_btns[0].master)
+        self.set_status(_("Bluetooth: somente leitura."))
 
     # ------------------------------------------------------------ Ultimate 2.4G on X
     def enter_xmode(self):

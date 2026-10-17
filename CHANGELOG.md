@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## 0.1.0-beta.6+u24g9 — 2026-10-16
+## 0.1.0-beta.6+u24g10 — 2026-10-16
 
 * Support for the **8BitDo Ultimate 2.4G** (the first Ultimate), with its mode switch on D (`2dc8:3012`; the dongle
   `2dc8:3013` is untested): profiles, buttons with the P1/P2 back buttons, sticks, triggers, rumble and backups in
@@ -13,6 +13,11 @@ This project follows [Semantic Versioning](https://semver.org/).
   “verificação falhou” after changing a button.
 * `u2gui` no longer reports “verificação falhou” when it creates a profile on the Ultimate 2.4G: the saved record is
   compared whole, minus the save counter and active profile its firmware keeps.
+* Ultimate 2.4G only on Bluetooth: `u2gui` shows, read-only, the copy of the D configuration it kept from the last
+  cable read (`~/.local/share/ultimate2/u24g-modo-d.bin`, the configuration Bluetooth uses), with its date in a banner
+  at the top (the message no longer hides under the footer buttons). Over Bluetooth the pad reports no profile
+  switch, so the active profile is not shown there.
+* `u2ctl` speaks Brazilian Portuguese when the system does: messages, help, argparse's words and device errors.
 * Warning when the X configuration is edited (2.4G receiver) while the controller is connected over Bluetooth,
   which uses the D configuration: a red banner in `u2gui` (checked at every poll) and a line in `u2ctl info` /
   `u2ctl xmode enter`. Changes made there would not apply where the controller is being used.
