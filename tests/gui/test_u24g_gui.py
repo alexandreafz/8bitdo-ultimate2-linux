@@ -237,3 +237,21 @@ def test_leaving_x_mode_when_the_pad_is_gone(monkeypatch, fast):
     clear_timers(a)
     a.destroy()
 
+
+def test_bluetooth_status_shows_the_battery(monkeypatch, fast):
+    from ultimate2 import battery
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))
+    monkeypatch.setattr(discovery, "xinput_u24g", lambda: False)
+    monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)
+    monkeypatch.setattr(battery, "bluetooth", lambda: {"capacity": 91, "status": "Discharging", "name": "8BitDo"})
+    a = new_app(monkeypatch)
+    try:
+        a.read_device()
+        pump(a)
+        assert "Bateria: 91%." in a.status.cget("text")
+        assert "91%" in [a.pill.itemcget(i, "text") for i in a.pill.find_withtag("battery")]
+        assert a.fw_label.cget("text") == ""                      # no firmware known over Bluetooth
+    finally:
+        clear_timers(a)
+        a.destroy()
+

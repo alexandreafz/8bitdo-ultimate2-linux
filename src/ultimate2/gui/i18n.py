@@ -131,6 +131,7 @@ EN = {
     "Clique num botão do controle para escolher a função dele.\nP1/P2: botões traseiros · ★: estrela/turbo.":
         "Click a button on the controller to choose its function.\nP1/P2: back buttons · ★: star/turbo.",
     "Copiar": "Copy",
+    "Bateria: {}%.": "Battery: {}%.",
     "Abrindo a configuração do modo X…": "Opening the X-mode configuration…",
     "Sem permissão para abrir o modo X: reinstale o pacote (regra udev) e reconecte o controle. Ou coloque a chave em D.":
         "No permission to open X mode: reinstall the package (udev rule) and replug the controller. Or set the switch to D.",

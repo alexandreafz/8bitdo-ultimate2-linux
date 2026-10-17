@@ -537,3 +537,46 @@ def test_keepalive_runs_until_stopped(tmp_path, monkeypatch):
         keepalive.run()
     assert ticks == [1.0, 1.0, 1.0]
 
+
+
+# ------------------------------------------------------------ battery (Bluetooth only)
+from ultimate2 import battery  # noqa: E402
+
+
+def _supply(sys_, name, hid_dir, uevent):
+    dev = sys_ / "devices" / "virtual" / "misc" / "uhid" / hid_dir
+    dev.mkdir(parents=True, exist_ok=True)
+    ps = sys_ / "class" / "power_supply" / name
+    ps.mkdir(parents=True)
+    (ps / "device").symlink_to(dev)
+    (ps / "uevent").write_text(uevent)
+
+
+def test_battery_over_bluetooth(tmp_path, monkeypatch):
+    monkeypatch.setattr(discovery, "SYS", str(tmp_path))
+    assert battery.bluetooth() is None
+    _supply(tmp_path, "hid-00:11:22:33:44:55-battery", "0005:054C:09CC.0001",          # another vendor's pad
+            "POWER_SUPPLY_CAPACITY=50\nPOWER_SUPPLY_STATUS=Discharging\n")
+    _supply(tmp_path, "hid-e4:17:d8:00:00:00-battery", "0005:2DC8:3012.0009",          # no report yet
+            "POWER_SUPPLY_STATUS=Unknown\n")
+    assert battery.bluetooth() is None
+    _supply(tmp_path, "hid-e4:17:d8:00:00:01-battery", "0005:2DC8:3012.000A",
+            "POWER_SUPPLY_NAME=hid-e4:17:d8:00:00:01-battery\nPOWER_SUPPLY_CAPACITY=92\n"
+            "POWER_SUPPLY_STATUS=Discharging\nPOWER_SUPPLY_MODEL_NAME=8BitDo Ultimate wireless\nnoise\n")
+    assert battery.bluetooth() == {"capacity": 92, "status": "Discharging", "name": "8BitDo Ultimate wireless"}
+
+
+def test_cli_battery(monkeypatch, capsys):
+    monkeypatch.setattr(battery, "bluetooth", lambda: {"capacity": 91, "status": "Discharging", "name": "8BitDo X"})
+    run("battery")
+    assert "8BitDo X: 91% (discharging)" in capsys.readouterr().out
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))
+    monkeypatch.setattr(discovery, "xinput_u24g", lambda: False)
+    monkeypatch.setattr(discovery, "bluetooth_u24g", lambda: True)
+    run("list")
+    assert "battery     91% (discharging)" in capsys.readouterr().out
+    monkeypatch.setattr(battery, "bluetooth", lambda: None)
+    run("list")
+    assert "battery" not in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="only known over Bluetooth"):
+        run("battery")

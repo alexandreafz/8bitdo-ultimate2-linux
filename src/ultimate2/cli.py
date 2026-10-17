@@ -4,7 +4,7 @@ import json
 import struct
 import sys
 
-from . import config, device, discovery, keepalive, xmode
+from . import battery, config, device, discovery, keepalive, xmode
 from . import protocol
 from .protocol import THEMES, VID, describe
 
@@ -29,6 +29,7 @@ def parser():
     p.add_argument("name", nargs="?", choices=list(THEMES.values()))
     p = sub.add_parser("xmode", help="Ultimate 2.4G on X: open its config channel (enter) or go back to X (leave)")
     p.add_argument("action", choices=("enter", "leave"))
+    sub.add_parser("battery", help="battery of the controller over Bluetooth (Ultimate 2.4G)")
     sub.add_parser("keepalive", help="keep Ultimate 2.4G pads on X read so they stay connected (systemd user service)")
     p = sub.add_parser("backup", help="save raw config record")
     p.add_argument("file")
@@ -47,6 +48,17 @@ def main(argv=None):
             print("Ultimate 2.4G in X mode: `u2ctl xmode enter` opens its X configuration (or set the switch to D)")
         if discovery.bluetooth_u24g():
             print("Ultimate 2.4G over Bluetooth: no configuration channel there, use the USB cable (switch on D)")
+            b = battery.bluetooth()
+            if b:
+                print(f"battery     {b['capacity']}% ({b['status'].lower()})")
+        return
+
+    if a.cmd == "battery":
+        b = battery.bluetooth()
+        if not b:
+            sys.exit("no 8BitDo controller reporting its battery: it is only known over Bluetooth "
+                     "(the 2.4G receiver does not report it)")
+        print(f"{b['name']}: {b['capacity']}% ({b['status'].lower()})")
         return
 
     if a.cmd == "keepalive":

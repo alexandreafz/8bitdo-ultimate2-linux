@@ -4,7 +4,7 @@ import threading
 import time
 from tkinter import filedialog, messagebox
 
-from .. import config, device, protocol, xmode
+from .. import battery, config, device, protocol, xmode
 from . import theme
 from .i18n import _
 from .theme import ACCENT, DANGER, DEFAULT_SKIN, EDITION_SKINS, MUTED, SKINS, THEME_NAMES
@@ -30,7 +30,7 @@ class DeviceSync:
         if state is None:                                      # red X over the bottom-right of the arcs
             c.create_line(15 * s, 10 * s, 22 * s, 17 * s, fill=DANGER, width=w, capstyle="round")
             c.create_line(15 * s, 17 * s, 22 * s, 10 * s, fill=DANGER, width=w, capstyle="round")
-        self.fw_label.configure(text=f"firmware {state[0]}" if state else "")
+        self.fw_label.configure(text=f"firmware {state[0]}" if state and state[0] else "")
         if state and state[1] is not None:                   # battery outline, fill to the level, then the %
             battery, px, bw, bh, top = state[1], 32 * s, 22 * s, 11 * s, 6 * s
             c.create_rectangle(px, top, px + bw, top + bh, outline=col, width=max(1, round(1.5 * s)))
@@ -176,10 +176,14 @@ class DeviceSync:
             if "X mode" in msg and not self.xmode_tried:
                 self.xmode_tried = True
                 return self.enter_xmode()
+            bt = battery.bluetooth() if "Bluetooth" in msg else None
+            if bt:                                       # the badge shows the battery even without a config channel
+                self.set_connected((None, bt["capacity"]))
             self.set_status(_("Ultimate 2.4G no modo X: coloque a chave de trás do controle em D para configurá-lo.")
                             if "X mode" in msg else
                             _("Ultimate 2.4G conectado por Bluetooth, que não permite configurar: ligue o cabo USB "
                               "(chave em D). Os perfis gravados valem também no Bluetooth.")
+                            + (" " + _("Bateria: {}%.").format(bt["capacity"]) if bt else "")
                             if "Bluetooth" in msg else
                             _("Controle desligado ou fora de alcance. Ligue-o: ele será lido automaticamente."))
             self._retry_job = self.after(theme.RETRY_MS, lambda: self.read_device(True))

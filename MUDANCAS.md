@@ -1,7 +1,7 @@
 # O que mudou em relação ao original
 
 Comparação entre o original **8bitdo-ultimate2-linux 0.1.0-beta.6** (commit `7257f07`, guardado sem alterações) e o
-estado atual (`0.1.0b6+u24g6`, commit `071a4de`). Para ver as linhas exatas: `git diff 7257f07 HEAD -- <arquivo>`.
+estado atual (`0.1.0b6+u24g7`). Para ver as linhas exatas: `git diff 7257f07 HEAD -- <arquivo>`.
 
 **Resumo:** 36 arquivos, 27 modificados e 9 novos, +2.048 / −114 linhas; nenhum arquivo removido. Todas as mudanças
 acrescentam suporte ao **8BitDo Ultimate 2.4G**; o comportamento com o Ultimate 2 Wireless continua o mesmo.
@@ -14,8 +14,9 @@ acrescentam suporte ao **8BitDo Ultimate 2.4G**; o comportamento com o Ultimate 
 | `discovery.py` | modificado | +36 −2 | Aceita o 2.4G pelo PID quando o descritor tem o relatório `0x81`; detecta modo X (`3106`) e Bluetooth; `connected_model()` |
 | `device.py` | modificado | +64 −23 | Pacote, tamanho do registro (1652), salvar (`0x15`) e tempos conforme o modelo; resposta conferida pelo offset; perfil ativo lido antes de gravar; avisos de modo X e Bluetooth |
 | `config.py` | modificado | +106 −13 | Layout do registro de 1652 bytes; códigos de tecla do 2.4G; nome do perfil em UTF-16LE; registros de macro; perfil novo igual ao do app oficial; `same()` |
-| `cli.py` | modificado | +42 −12 | Comandos `u2ctl xmode enter|leave` e `u2ctl keepalive`; mensagens por modelo; `theme` recusado no 2.4G |
+| `cli.py` | modificado | +42 −12 | Comandos `u2ctl xmode enter|leave`, `u2ctl keepalive` e `u2ctl battery`; mensagens por modelo; `theme` recusado no 2.4G |
 | `xmode.py` | **novo** | +87 | Abre a configuração do modo X pelo USB (sequência do Windows: `02 08 03` + vibração) e volta com `81 05 00 51 02` |
+| `battery.py` | **novo** | +31 | Bateria do controle no Bluetooth (lida do kernel) |
 | `keepalive.py` | **novo** | +50 | Mantém o controle em X sendo lido para não desligar ao trocar de perfil |
 | `__init__.py` | modificado | +1 −1 | Versão `0.1.0b6+u24g6` |
 

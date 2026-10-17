@@ -208,3 +208,9 @@ endpoint all the time; Linux' xpad only does while a program has the input node 
 drops the controller again ~5 s after each reconnection and finally switches it off. Keeping the joystick node open
 (`u2ctl keepalive`) fixes it.
 
+### Battery
+
+Only over Bluetooth: that descriptor has the HID Battery Strength usage (`05 06 09 20`, 0..100) in the gamepad
+report, which the kernel exposes as `/sys/class/power_supply/hid-<mac>-battery` (`ultimate2/battery.py`). The
+receiver's descriptor (`3013`) has no such field and it does not answer the Ultimate 2's `81 04 21 01 00 00 06`.
+
