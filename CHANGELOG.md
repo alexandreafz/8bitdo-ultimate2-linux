@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## 0.1.0-beta.6+u24g7 — 2026-10-16
+## 0.1.0-beta.6+u24g8 — 2026-10-16
 
 * Support for the **8BitDo Ultimate 2.4G** (the first Ultimate), with its mode switch on D (`2dc8:3012`; the dongle
   `2dc8:3013` is untested): profiles, buttons with the P1/P2 back buttons, sticks, triggers, rumble and backups in

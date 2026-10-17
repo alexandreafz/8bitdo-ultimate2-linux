@@ -255,3 +255,24 @@ def test_bluetooth_status_shows_the_battery(monkeypatch, fast):
         clear_timers(a)
         a.destroy()
 
+
+def test_battery_shown_while_configuring_another_way(ua, u24, monkeypatch, fast):
+    """Pad on Bluetooth while the cable/receiver carries the config: the badge still shows its battery."""
+    from ultimate2 import battery
+    from ultimate2.gui import theme as th
+    assert [ua.pill.itemcget(i, "text") for i in ua.pill.find_withtag("battery")] == []
+    monkeypatch.setattr(battery, "bluetooth", lambda: {"capacity": 64, "status": "Discharging", "name": "8BitDo"})
+    ua.read_device()
+    pump(ua)
+    assert ua.conn == ("2.04", 64)
+    assert "64%" in [ua.pill.itemcget(i, "text") for i in ua.pill.find_withtag("battery")]
+    monkeypatch.setattr(battery, "bluetooth", lambda: {"capacity": 63, "status": "Discharging", "name": "8BitDo"})
+    monkeypatch.setattr(th, "POLL_MS", 10 ** 7)
+    ua.poll()
+    pump(ua)
+    assert ua.conn == ("2.04", 63)
+    monkeypatch.setattr(battery, "bluetooth", lambda: None)
+    ua.poll()
+    pump(ua)
+    assert ua.conn == ("2.04", 63)                      # Bluetooth gone: last known value kept until the next read
+

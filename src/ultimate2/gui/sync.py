@@ -130,8 +130,9 @@ class DeviceSync:
 
             def done(r):
                 slot, pad = r
-                if pad:
-                    self.conn = (self.conn[0], pad["battery"])
+                bt = battery.bluetooth() if self.model is protocol.U24G and self.conn else None
+                if pad or bt:
+                    self.conn = (self.conn[0], pad["battery"] if pad else bt["capacity"])
                 if slot is not None and self.conn:
                     self.set_connected(self.conn)          # recover the badge after a transient error
                 if slot is not None and slot != self.active_slot:
@@ -211,7 +212,8 @@ class DeviceSync:
             self.doc = config.decode(cfg)
             self.active_slot = self.doc["cur_slot"]
             fw = f"{info['firmware'] / 100:.2f}" if info else "?"
-            self.conn = (fw, pad and pad["battery"])
+            bt = battery.bluetooth() if self.model is protocol.U24G else None   # pad on Bluetooth, configured via
+            self.conn = (fw, pad["battery"] if pad else bt and bt["capacity"])  # the cable or the receiver
             self.set_connected(self.conn)
             modes = {0: "Switch", 1: "Android" if self.model.leds else "D-input", 3: "Windows (XInput)" if self.model.leds else "X-input"}
             mode = modes.get(self.doc["gamepad_mode"], self.doc["gamepad_mode"])
