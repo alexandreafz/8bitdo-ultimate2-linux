@@ -26,3 +26,10 @@ def no_real_hardware(request, monkeypatch, tmp_path):
     if request.module.__name__ == "test_discovery":
         return
     monkeypatch.setattr(discovery, "SYS", str(tmp_path / "no-sys"))
+
+
+@pytest.fixture(autouse=True)
+def cli_in_english(monkeypatch):
+    """u2ctl follows the system language; the tests read its English text unless they pick Portuguese."""
+    from ultimate2 import mensagens
+    monkeypatch.setattr(mensagens, "LANG", "en")
